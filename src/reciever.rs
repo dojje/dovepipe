@@ -6,31 +6,31 @@ use crate::{read_position, write_position, u8s_to_u64, recv, send_unil_recv};
 
 
 trait ProgressTracker {
-    // - ny med längd
-    // - set grej
-    // - få de först 63 oskickade
     fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>>;
     fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>>;
+    fn destruct(&self);
 }
 
 struct FileProgTrack {
+    filename: String,
     file: File,
     size: u64,
 }
 
 impl FileProgTrack {
-    fn new(filename: &str, size: u64) -> Result<Self, Box<dyn error::Error>> {
+    fn new(filename: String, size: u64) -> Result<Self, Box<dyn error::Error>> {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
-            .open(filename)?;
+            .open(&filename)?;
 
         // Populate file with 0:s
         file.set_len(get_msg_amt(size))?;
 
         Ok(
             Self {
+                filename,
                 file,
                 size,
             }
@@ -97,6 +97,10 @@ impl ProgressTracker for FileProgTrack {
         }
 
         Ok(dropped)
+    }
+
+    fn destruct(&self) {
+        remove_file(&self.filename).unwrap()
     }
 }
 
@@ -176,6 +180,14 @@ impl ProgressTracker for MemProgTracker {
 
         Ok(dropped)
     }
+    
+    fn destruct(&self) {
+    }
+}
+
+pub enum ProgressTracking {
+    File(String),
+    Memory
 }
 
 fn get_offset(msg_num: u64) -> u64 {
@@ -262,7 +274,7 @@ fn from_binary(bin: [bool; 8]) -> u8 {
     num
 }
 
-fn write_msg<T: ProgressTracker>(buf: &[u8], out_file: &File, prog_tracker: &mut T) -> Result<(), Box<dyn error::Error>> {
+fn write_msg(buf: &[u8], out_file: &File, prog_tracker: &mut Box<dyn ProgressTracker>) -> Result<(), Box<dyn error::Error>> {
     // Get msg num
     let msg_num = u8s_to_u64(&buf[0..8])?;
 
@@ -277,13 +289,12 @@ fn write_msg<T: ProgressTracker>(buf: &[u8], out_file: &File, prog_tracker: &mut
     Ok(())
 }
 
-const TRACKER_FILENAME: &str =  "filesender_recv_tracker";
-
 pub async fn recv_file(
     file: &mut File,
     sock: Arc<UdpSocket>,
     ip: SocketAddr,
     recv_size: u64,
+    progress_tracking: ProgressTracking,
 ) -> Result<(), Box<dyn error::Error>> {
     // When the giver think it's done it should say that to the taker
     // the taker should check that it has recieved all packets
@@ -292,7 +303,14 @@ pub async fn recv_file(
 
     // Create index file
     // TODO Check so that file doesn't already exist
-    let mut prog_tracker = FileProgTrack::new(TRACKER_FILENAME, recv_size)?;
+    let mut prog_tracker: Box<dyn ProgressTracker> = match progress_tracking {
+        ProgressTracking::File(filename) => {
+            Box::new(FileProgTrack::new(filename, recv_size).unwrap())
+        },
+        ProgressTracking::Memory => {
+            Box::new(MemProgTracker::new(recv_size))
+        },
+    };
 
     let mut first = true;
     'pass: loop {
@@ -392,7 +410,7 @@ pub async fn recv_file(
         }
     };
 
-    remove_file("filesender_recv_index")?;
+    prog_tracker.destruct();
     Ok(())
 }
 
