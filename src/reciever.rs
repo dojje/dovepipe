@@ -9,7 +9,7 @@ trait ProgressTracker {
     // - ny med längd
     // - set grej
     // - få de först 63 oskickade
-    fn recv_msg(&self, msg_num: u64) -> Result<(), Box<dyn error::Error>>;
+    fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>>;
     fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>>;
 }
 
@@ -27,7 +27,7 @@ impl FileProgTrack {
             .open(filename)?;
 
         // Populate file with 0:s
-        file.set_len(size / 500 / 8 + 1)?;
+        file.set_len(get_msg_amt(size))?;
 
         Ok(
             Self {
@@ -39,7 +39,7 @@ impl FileProgTrack {
 }
 
 impl ProgressTracker for FileProgTrack {
-    fn recv_msg(&self, msg_num: u64) -> Result<(), Box<dyn error::Error>> {
+    fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>> {
         // Get position in index file
         let (offset, pos_in_offset) = get_pos_of_num(msg_num);
 
@@ -94,6 +94,84 @@ impl ProgressTracker for FileProgTrack {
 
                 bit_pos += 1;
             }
+        }
+
+        Ok(dropped)
+    }
+}
+
+fn get_msg_amt(file_len: u64) -> u64 {
+    if file_len % 500 == 0 {
+        file_len / 500
+    } else {
+        file_len / 500 + 1
+    }
+}
+struct MemProgTracker {
+    tracker: Vec<u8>
+}
+
+impl MemProgTracker {
+    fn new(size: u64) -> Self {
+        let tracker_size = get_msg_amt(size) as usize;
+        let tracker = vec![0u8; tracker_size];
+
+        Self {
+            tracker
+        }
+    }
+}
+
+impl ProgressTracker for MemProgTracker {
+    fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>> {
+        // Get position in index file
+        let (offset, pos_in_offset) = get_pos_of_num(msg_num);
+
+        // Read offset position from index file
+
+        // Change the offset
+        let mut offset_binary = to_binary(self.tracker[offset as usize]);
+        offset_binary[pos_in_offset as usize] = true;
+        let offset_buf = from_binary(offset_binary);
+
+        // Write the offset
+        self.tracker[offset as usize] = offset_buf;
+
+        Ok(())
+    }
+
+    fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>> {
+        let mut dropped: Vec<u64> = Vec::new();
+
+        // let mut byte = num / 8;
+        // let mut pos = num % 8;
+
+        let total = get_msg_amt(self.tracker.len() as u64);
+
+        let mut i = 0;
+        for byte in &self.tracker {
+            // For every byte
+            let bin = to_binary(*byte);
+
+            let mut bit_pos = 0;
+            for bit in bin {
+                let num = get_num_of_pos(i, bit_pos);
+                // num starts it's counting from 0
+                if num == total {
+                    // Return if it has checked every bit
+                    return Ok(dropped);
+                }
+                if !bit {
+                    dropped.push(num);
+                    if dropped.len() == 63 {
+                        return Ok(dropped);
+                    }
+                }
+
+                bit_pos += 1;
+            }
+
+            i += 1;
         }
 
         Ok(dropped)
@@ -184,7 +262,7 @@ fn from_binary(bin: [bool; 8]) -> u8 {
     num
 }
 
-fn write_msg<T: ProgressTracker>(buf: &[u8], out_file: &File, prog_tracker: &T) -> Result<(), Box<dyn error::Error>> {
+fn write_msg<T: ProgressTracker>(buf: &[u8], out_file: &File, prog_tracker: &mut T) -> Result<(), Box<dyn error::Error>> {
     // Get msg num
     let msg_num = u8s_to_u64(&buf[0..8])?;
 
@@ -214,7 +292,7 @@ pub async fn recv_file(
 
     // Create index file
     // TODO Check so that file doesn't already exist
-    let prog_tracker = FileProgTrack::new(TRACKER_FILENAME, recv_size)?;
+    let mut prog_tracker = FileProgTrack::new(TRACKER_FILENAME, recv_size)?;
 
     let mut first = true;
     'pass: loop {
@@ -309,7 +387,7 @@ pub async fn recv_file(
                 continue 'pass;
             }
 
-            write_msg(buf, file, &prog_tracker)?;
+            write_msg(buf, file, &mut prog_tracker)?;
 
         }
     };
