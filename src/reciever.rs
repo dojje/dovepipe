@@ -4,6 +4,102 @@ use tokio::{net::UdpSocket, time};
 
 use crate::{read_position, write_position, u8s_to_u64, recv, send_unil_recv};
 
+
+trait ProgressTracker {
+    // - ny med längd
+    // - set grej
+    // - få de först 63 oskickade
+    fn recv_msg(&self, msg_num: u64) -> Result<(), Box<dyn error::Error>>;
+    fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>>;
+}
+
+struct FileProgTrack {
+    file: File,
+    size: u64,
+}
+
+impl FileProgTrack {
+    fn new(filename: &str, size: u64) -> Result<Self, Box<dyn error::Error>> {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(filename)?;
+
+        // Populate file with 0:s
+        file.set_len(size / 500 / 8 + 1)?;
+
+        Ok(
+            Self {
+                file,
+                size,
+            }
+        )
+    }
+}
+
+impl ProgressTracker for FileProgTrack {
+    fn recv_msg(&self, msg_num: u64) -> Result<(), Box<dyn error::Error>> {
+        // Get position in index file
+        let (offset, pos_in_offset) = get_pos_of_num(msg_num);
+
+        // Read offset position from index file
+        let mut offset_buf = [0u8; 1];
+        read_position(&self.file, &mut offset_buf, offset)?;
+
+        // Change the offset
+        let mut offset_binary = to_binary(offset_buf[0]);
+        offset_binary[pos_in_offset as usize] = true;
+        let offset_buf = from_binary(offset_binary);
+
+        // Write the offset
+        write_position(&self.file, &[offset_buf], offset)?;
+
+        Ok(())
+    }
+
+    fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>> {
+
+        let mut dropped: Vec<u64> = Vec::new();
+
+        // let mut byte = num / 8;
+        // let mut pos = num % 8;
+
+        let total = if self.size % 500 == 0 {
+            self.size / 500
+        } else {
+            self.size / 500 + 1
+        };
+
+        for byte in 0..self.file.metadata()?.len() {
+            // For every byte
+            let mut buf = [0u8];
+            read_position(&self.file, &mut buf, byte)?;
+            let bin = to_binary(buf[0]);
+
+            let mut bit_pos = 0;
+            for bit in bin {
+                let num = get_num_of_pos(byte, bit_pos);
+                // num starts it's counting from 0
+                if num == total {
+                    // Return if it has checked every bit
+                    return Ok(dropped);
+                }
+                if !bit {
+                    dropped.push(num);
+                    if dropped.len() == 63 {
+                        return Ok(dropped);
+                    }
+                }
+
+                bit_pos += 1;
+            }
+        }
+
+        Ok(dropped)
+    }
+}
+
 fn get_offset(msg_num: u64) -> u64 {
     msg_num * 500
 }
@@ -88,26 +184,7 @@ fn from_binary(bin: [bool; 8]) -> u8 {
     num
 }
 
-fn write_indx(msg_num: u64, indx_file: &File) -> Result<(), Box<dyn error::Error>> {
-    // Get position in index file
-    let (offset, pos_in_offset) = get_pos_of_num(msg_num);
-
-    // Read offset position from index file
-    let mut offset_buf = [0u8; 1];
-    read_position(&indx_file, &mut offset_buf, offset)?;
-
-    // Change the offset
-    let mut offset_binary = to_binary(offset_buf[0]);
-    offset_binary[pos_in_offset as usize] = true;
-    let offset_buf = from_binary(offset_binary);
-
-    // Write the offset
-    write_position(&indx_file, &[offset_buf], offset)?;
-
-    Ok(())
-}
-
-fn write_msg(buf: &[u8], out_file: &File, indx_file: &File) -> Result<(), Box<dyn error::Error>> {
+fn write_msg<T: ProgressTracker>(buf: &[u8], out_file: &File, prog_tracker: &T) -> Result<(), Box<dyn error::Error>> {
     // Get msg num
     let msg_num = u8s_to_u64(&buf[0..8])?;
 
@@ -117,10 +194,12 @@ fn write_msg(buf: &[u8], out_file: &File, indx_file: &File) -> Result<(), Box<dy
     let rest = &buf[8..];
     write_position(out_file, &rest, msg_offset).unwrap();
 
-    write_indx(msg_num, indx_file)?;
+    prog_tracker.recv_msg(msg_num)?;
 
     Ok(())
 }
+
+const TRACKER_FILENAME: &str =  "filesender_recv_tracker";
 
 pub async fn recv_file(
     file: &mut File,
@@ -135,21 +214,14 @@ pub async fn recv_file(
 
     // Create index file
     // TODO Check so that file doesn't already exist
-    let index_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open("filesender_recv_index")?;
-
-    // Populate file with 0:s
-    index_file.set_len(recv_size / 500 / 8 + 1)?;
+    let prog_tracker = FileProgTrack::new(TRACKER_FILENAME, recv_size)?;
 
     let mut first = true;
     'pass: loop {
         let mut first_data: Option<([u8;508], usize)> = None; 
 
         if !first {
-            let dropped = get_dropped("filesender_recv_index", recv_size)?;
+            let dropped = prog_tracker.get_unrecv()?;
 
             if dropped.len() == 0 {
                 // Send message that everything is recieved
@@ -225,7 +297,7 @@ pub async fn recv_file(
 
                 amt
             };
-            
+
             let buf = &buf[0..amt];
 
             // Skip if the first iteration is a hole punch msg
@@ -237,7 +309,7 @@ pub async fn recv_file(
                 continue 'pass;
             }
 
-            write_msg(buf, file, &index_file)?;
+            write_msg(buf, file, &prog_tracker)?;
 
         }
     };
@@ -265,47 +337,4 @@ fn gen_dropped_msg(dropped: Vec<u64>) -> Result<Vec<u8>, Box<dyn error::Error>> 
     }
 
     Ok(msg)
-}
-
-/// Gets the first 63 dropped messages
-fn get_dropped(index_filename: &str, file_len: u64) -> Result<Vec<u64>, Box<dyn error::Error>> {
-    let file = File::open(index_filename)?;
-
-    let mut dropped: Vec<u64> = Vec::new();
-
-    // let mut byte = num / 8;
-    // let mut pos = num % 8;
-
-    let total = if file_len % 500 == 0 {
-        file_len / 500
-    } else {
-        file_len / 500 + 1
-    };
-
-    for byte in 0..file.metadata()?.len() {
-        // For every byte
-        let mut buf = [0u8];
-        read_position(&file, &mut buf, byte)?;
-        let bin = to_binary(buf[0]);
-
-        let mut bit_pos = 0;
-        for bit in bin {
-            let num = get_num_of_pos(byte, bit_pos);
-            // num starts it's counting from 0
-            if num == total {
-                // Return if it has checked every bit
-                return Ok(dropped);
-            }
-            if !bit {
-                dropped.push(num);
-                if dropped.len() == 63 {
-                    return Ok(dropped);
-                }
-            }
-
-            bit_pos += 1;
-        }
-    }
-
-    Ok(dropped)
 }

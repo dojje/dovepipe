@@ -25,7 +25,7 @@ fn get_file_buf_from_msg_num(
 }
 
 // Intervals
-const SEND_FILE_INTERVAL: u64 = 10;
+const SEND_FILE_INTERVAL: u64 = 1500;
 
 pub async fn send_file(
     sock: Arc<UdpSocket>,
@@ -34,6 +34,7 @@ pub async fn send_file(
 ) -> Result<(), Box<dyn error::Error>> {
     // TODO: Send amount of bytes in file
     // TODO: Add function for sending until request stops
+    // TODO: Make different ways to keep track of progress
 
     punch_hole(&sock, reciever).await?;
 
@@ -47,14 +48,8 @@ pub async fn send_file(
     let file_len = input_file.metadata()?.len();
     let mut offset = 0;
     let mut msg_num: u64 = 0;
-    // This calculates the amount of messages to send
-    // let total = if file_len % 500 == 0 {
-    //     file_len / 500
-    // } else {
-    //     file_len / 500 + 1
-    // };
 
-    let mut send_interval = time::interval(Duration::from_millis(SEND_FILE_INTERVAL));
+    let mut send_interval = time::interval(Duration::from_micros(SEND_FILE_INTERVAL));
     loop {
         let mut file_buf = [0u8; 500];
         let amt = read_position(&input_file, &mut file_buf, offset)?;
