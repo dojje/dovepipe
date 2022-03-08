@@ -7,12 +7,6 @@ use shared::send_maybe;
 
 use crate::{read_position, punch_hole, get_buf, send_unil_recv, u8s_to_u64};
 
-fn get_file_len(file_name: &String) -> Result<u64, Box<dyn error::Error>> {
-    let file = File::open(file_name)?;
-
-    Ok(file.metadata().unwrap().len())
-}
-
 fn get_file_buf_from_msg_num(
     msg: u64,
     file: &File,
@@ -40,14 +34,43 @@ pub async fn send_file(
 
     thread::sleep(Duration::from_millis(1000));
 
+    let input_file = File::open(file_name)?;
+    let file_len = input_file.metadata()?.len();
+
+    let file_len_arr = file_len.to_be_bytes();
+    let msg = [8, file_len_arr[0], file_len_arr[1], file_len_arr[2], file_len_arr[3], file_len_arr[4], file_len_arr[5], file_len_arr[6], file_len_arr[7]];
+
+    let mut has_sent = false;
+    loop {
+        let mut buf = [0u8; 508];
+        let sleep = time::sleep(Duration::from_millis(1500));
+        tokio::select! {
+            _ = sleep => {
+                if has_sent {
+                    break;
+                }
+            }
+
+            amt = sock.recv(&mut buf) => {
+                let amt = amt?;
+                let buf = &buf[0..amt];
+
+                if buf.len() == 1 && buf[0] == 9 {
+                    sock.send_to(&msg, reciever).await?;
+                    has_sent = true;
+                }
+            }
+
+        }
+    }
+
     // Udp messages should be 508 bytes
     // 8 of those bytes are used for checking order of recieving bytes
     // The rest 500 bytes are used to send the file
     // The file gets send 500 bytes
-    let input_file = File::open(file_name)?;
-    let file_len = input_file.metadata()?.len();
     let mut offset = 0;
     let mut msg_num: u64 = 0;
+
 
     let mut send_interval = time::interval(Duration::from_micros(SEND_FILE_INTERVAL));
     loop {

@@ -293,9 +293,25 @@ pub async fn recv_file(
     file: &mut File,
     sock: Arc<UdpSocket>,
     ip: SocketAddr,
-    recv_size: u64,
     progress_tracking: ProgressTracking,
 ) -> Result<(), Box<dyn error::Error>> {
+    let buf: [u8; 508];
+    let amt = loop {
+        let mut new_buf = [0u8; 508];
+        let amt = send_unil_recv(&sock, &[9], &ip, &mut new_buf, 500).await?;
+        if &new_buf[0..amt].len() < &50 {
+        }
+
+        if &new_buf[0..amt].len() == &9 && new_buf[0] == 8 {
+            buf = new_buf;
+            break amt;
+        }
+    };
+    let buf = &buf[0..amt];
+
+    let size_be_bytes = &buf[1..];
+    let size = u8s_to_u64(size_be_bytes)?;
+
     // When the giver think it's done it should say that to the taker
     // the taker should check that it has recieved all packets
     // If not, the taker should send what messages are unsent
@@ -305,10 +321,10 @@ pub async fn recv_file(
     // TODO Check so that file doesn't already exist
     let mut prog_tracker: Box<dyn ProgressTracker> = match progress_tracking {
         ProgressTracking::File(filename) => {
-            Box::new(FileProgTrack::new(filename, recv_size).unwrap())
+            Box::new(FileProgTrack::new(filename, size).unwrap())
         },
         ProgressTracking::Memory => {
-            Box::new(MemProgTracker::new(recv_size))
+            Box::new(MemProgTracker::new(size))
         },
     };
 

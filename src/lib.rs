@@ -21,6 +21,20 @@ pub mod reciever;
 pub use sender::send_file;
 pub use reciever::recv_file;
 
+// *MESSAGES*
+// have_file: 0
+// i_have_code: 1
+// ip_for_code: 2
+// taker_ip: 3
+// you_have_file: 4
+// done_sending: 5
+// missed_messages: 6
+// all_messages are sent: 7
+// file_size: 8
+// send_file_size: 9
+
+// holepunch: 255
+
 fn u8s_to_u64(nums: &[u8]) -> io::Result<u64> {
     if nums.len() != 8 {
         return Err(io::Error::new(
