@@ -1,9 +1,14 @@
-use std::{fs::{File, OpenOptions, remove_file}, error, sync::Arc, net::SocketAddr, time::Duration, io};
+use std::{
+    error,
+    fs::{remove_file, File, OpenOptions},
+    io,
+    net::SocketAddr,
+    time::Duration,
+};
 
 use tokio::{net::UdpSocket, time};
 
-use crate::{read_position, write_position, u8s_to_u64, recv, send_unil_recv};
-
+use crate::{read_position, recv, send_unil_recv, u8s_to_u64, write_position};
 
 trait ProgressTracker {
     fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>>;
@@ -28,13 +33,11 @@ impl FileProgTrack {
         // Populate file with 0:s
         file.set_len(get_msg_amt(size))?;
 
-        Ok(
-            Self {
-                filename,
-                file,
-                size,
-            }
-        )
+        Ok(Self {
+            filename,
+            file,
+            size,
+        })
     }
 }
 
@@ -59,7 +62,6 @@ impl ProgressTracker for FileProgTrack {
     }
 
     fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>> {
-
         let mut dropped: Vec<u64> = Vec::new();
 
         // let mut byte = num / 8;
@@ -112,7 +114,7 @@ fn get_msg_amt(file_len: u64) -> u64 {
     }
 }
 struct MemProgTracker {
-    tracker: Vec<u8>
+    tracker: Vec<u8>,
 }
 
 impl MemProgTracker {
@@ -120,9 +122,7 @@ impl MemProgTracker {
         let tracker_size = get_msg_amt(size) as usize;
         let tracker = vec![0u8; tracker_size];
 
-        Self {
-            tracker
-        }
+        Self { tracker }
     }
 }
 
@@ -180,14 +180,13 @@ impl ProgressTracker for MemProgTracker {
 
         Ok(dropped)
     }
-    
-    fn destruct(&self) {
-    }
+
+    fn destruct(&self) {}
 }
 
 pub enum ProgressTracking {
     File(String),
-    Memory
+    Memory,
 }
 
 fn get_offset(msg_num: u64) -> u64 {
@@ -274,7 +273,11 @@ fn from_binary(bin: [bool; 8]) -> u8 {
     num
 }
 
-fn write_msg(buf: &[u8], out_file: &File, prog_tracker: &mut Box<dyn ProgressTracker>) -> Result<(), Box<dyn error::Error>> {
+fn write_msg(
+    buf: &[u8],
+    out_file: &File,
+    prog_tracker: &mut Box<dyn ProgressTracker>,
+) -> Result<(), Box<dyn error::Error>> {
     // Get msg num
     let msg_num = u8s_to_u64(&buf[0..8])?;
 
@@ -291,7 +294,7 @@ fn write_msg(buf: &[u8], out_file: &File, prog_tracker: &mut Box<dyn ProgressTra
 
 pub async fn recv_file(
     file: &mut File,
-    sock: Arc<UdpSocket>,
+    sock: &UdpSocket,
     ip: SocketAddr,
     progress_tracking: ProgressTracking,
 ) -> Result<(), Box<dyn error::Error>> {
@@ -299,10 +302,10 @@ pub async fn recv_file(
     let amt = loop {
         let mut new_buf = [0u8; 508];
         let amt = send_unil_recv(&sock, &[9], &ip, &mut new_buf, 500).await?;
-        if &new_buf[0..amt].len() < &50 {
-        }
 
-        if &new_buf[0..amt].len() == &9 && new_buf[0] == 8 {
+
+
+        if amt == 9 && new_buf[0] == 8 {
             buf = new_buf;
             break amt;
         }
@@ -320,28 +323,24 @@ pub async fn recv_file(
     // Create index file
     // TODO Check so that file doesn't already exist
     let mut prog_tracker: Box<dyn ProgressTracker> = match progress_tracking {
-        ProgressTracking::File(filename) => {
-            Box::new(FileProgTrack::new(filename, size).unwrap())
-        },
-        ProgressTracking::Memory => {
-            Box::new(MemProgTracker::new(size))
-        },
+        ProgressTracking::File(filename) => Box::new(FileProgTrack::new(filename, size).unwrap()),
+        ProgressTracking::Memory => Box::new(MemProgTracker::new(size)),
     };
 
     let mut first = true;
     'pass: loop {
-        let mut first_data: Option<([u8;508], usize)> = None; 
+        let mut first_data: Option<([u8; 508], usize)> = None;
 
         if !first {
             let dropped = prog_tracker.get_unrecv()?;
 
             if dropped.len() == 0 {
                 // Send message that everything is recieved
-                
+
                 loop {
                     let sleep = time::sleep(Duration::from_millis(1500));
 
-                    let mut buf = [0u8;508];
+                    let mut buf = [0u8; 508];
                     tokio::select! {
                         _ = sleep => {
                             break;
@@ -356,13 +355,13 @@ pub async fn recv_file(
                                 send_maybe(&sock, &[7], &ip).await?;
                                 #[cfg(not(feature = "sim_wan"))]
                                 sock.send_to(&[7], ip).await?;
-                                
+
                             }
 
                         }
                     }
                 }
-                
+
                 break;
             }
             let dropped_msg = gen_dropped_msg(dropped)?;
@@ -375,17 +374,13 @@ pub async fn recv_file(
                 if msg_buf.len() != 1 && msg_buf[0] != 5 {
                     first_data = Some((buf, amt));
                     break;
-
                 }
-
             }
         }
-        first = false;
 
         loop {
             let wait_time = time::sleep(Duration::from_millis(2000));
             let mut buf = [0; 508];
-
 
             let amt = if let Some((new_buf, amt)) = first_data {
                 buf = new_buf;
@@ -393,7 +388,6 @@ pub async fn recv_file(
                 first_data = None;
 
                 amt
-
             } else {
                 // Recieve message from sender
                 let amt = tokio::select! {
@@ -415,16 +409,19 @@ pub async fn recv_file(
             // Skip if the first iteration is a hole punch msg
             if buf.len() == 1 && buf[0] == 255 {
                 continue;
-            }
-            else if buf.len() == 1 && buf[0] == 5 {
+            } else if buf.len() == 1 && buf[0] == 5 {
                 // Done sending
                 continue 'pass;
             }
 
-            write_msg(buf, file, &mut prog_tracker)?;
+            if first && buf[0] == 8 {
+                continue;
+            }
 
+            write_msg(buf, file, &mut prog_tracker)?;
+            first = false;
         }
-    };
+    }
 
     prog_tracker.destruct();
     Ok(())

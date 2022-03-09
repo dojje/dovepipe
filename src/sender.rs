@@ -1,11 +1,11 @@
-use std::{error, fs::File, net::{SocketAddr}, sync::Arc, thread, time::Duration};
+use std::{error, fs::File, net::SocketAddr, thread, time::Duration};
 
 use tokio::{net::UdpSocket, time};
 
 #[cfg(feature = "sim_wan")]
 use shared::send_maybe;
 
-use crate::{read_position, punch_hole, get_buf, send_unil_recv, u8s_to_u64};
+use crate::{get_buf, punch_hole, read_position, send_unil_recv, u8s_to_u64};
 
 fn get_file_buf_from_msg_num(
     msg: u64,
@@ -21,40 +21,9 @@ fn get_file_buf_from_msg_num(
 // Intervals
 const SEND_FILE_INTERVAL: u64 = 1500;
 
-/// Used to send file
-/// 
-/// # Sending files
-/// 
-/// ## Messages
-/// 
-/// Messages are 508 bytes in size. This is because that is the biggest message you can send over
-/// udp without getting dropped.
-/// 
-/// The first 8 bytes or 64 bits in the message are used for telling what message this is.
-/// The counting starts at 0.
-/// 
-/// The rest is content of the file
-/// 
-/// ## Hole punch
-/// 
-/// A hole punch is a way for clients to communicate without requireing a port-forward.
-/// 
-/// [Here](https://en.wikipedia.org/wiki/UDP_hole_punching) is a wikipedia article about it.
-/// 
-/// But it works like this
-/// 1. Client A sends a udp message to client B:s ip-address and port.
-/// 2. Client B does the same as client A but with client A:s ip-address and port.
-/// 3. Now they are able to send messages over udp from where they have hole-punched to.
-/// 
-/// ## Sending
-/// 
-/// It sends the file by sending many messages. When it's done it will send a message.
-/// If any messages got dropped the client will send a list of those.
-/// If the file was recieved correctly the reciever will send a message.
-/// 
 pub async fn send_file(
-    sock: Arc<UdpSocket>,
-    file_name: String,
+    sock: &UdpSocket,
+    file_name: &str,
     reciever: SocketAddr,
 ) -> Result<(), Box<dyn error::Error>> {
     // TODO: Send amount of bytes in file
@@ -69,7 +38,17 @@ pub async fn send_file(
     let file_len = input_file.metadata()?.len();
 
     let file_len_arr = file_len.to_be_bytes();
-    let msg = [8, file_len_arr[0], file_len_arr[1], file_len_arr[2], file_len_arr[3], file_len_arr[4], file_len_arr[5], file_len_arr[6], file_len_arr[7]];
+    let msg = [
+        8,
+        file_len_arr[0],
+        file_len_arr[1],
+        file_len_arr[2],
+        file_len_arr[3],
+        file_len_arr[4],
+        file_len_arr[5],
+        file_len_arr[6],
+        file_len_arr[7],
+    ];
 
     let mut has_sent = false;
     loop {
@@ -101,7 +80,6 @@ pub async fn send_file(
     // The file gets send 500 bytes
     let mut offset = 0;
     let mut msg_num: u64 = 0;
-
 
     let mut send_interval = time::interval(Duration::from_micros(SEND_FILE_INTERVAL));
     loop {
