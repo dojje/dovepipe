@@ -7,3 +7,11 @@ edition = "2021"
 
 [dependencies]
 tokio = {version = "1", features = ["full"]}
+
+[[example]]
+name = "sender"
+path = "examples/sender.rs"
+
+[[example]]
+name = "reciever"
+path = "examples/reciever.rs"
