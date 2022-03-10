@@ -1,8 +1,40 @@
-//! Used to send file
+//! ## Usage
+//! \
+//! 
+//! **Sender example**
+//! 
+//! ```
+//! let sock = UdpSocket::bind("0.0.0.0:3456")
+//!     .await
+//!     .expect("could not bind to address");
+
+//! // Send the file with the send_file funciton
+//! send_file(&sock, "recieve_destination", SocketAddr::from_str("127.0.0.1:7890"))
+//!     .await
+//!     .expect("error when sending file");
+//! ``` 
+//! \
+//! 
+//! **Reciever example**
+//! 
+//! ```
+//! let sock = UdpSocket::bind("0.0.0.0:7890")
+//!     .await
+//!     .expect("could not bind to address");
 //!
-//! # Sending files
-//!
-//! ## Messages
+//! recv_file(
+//!     &mut File::create("recieve_destination").expect("could not create output file"),
+//!     &sock,
+//!     SocketAddr::from_str("127.0.0.1:3456"),
+//!     ProgressTracking::Memory,
+//! )
+//! .await
+//! .expect("error when sending file");
+//! ```
+//! 
+//! ## Sending files
+//! 
+//! ### Messages
 //!
 //! Messages are 508 bytes in size. This is because that is the biggest message you can send over
 //! udp without getting dropped.
@@ -12,7 +44,7 @@
 //!
 //! The rest is content of the file
 //!
-//! ## Hole punch
+//! ### Hole punch
 //!
 //! A hole punch is a way for clients to communicate without requireing a port-forward.
 //!
@@ -22,10 +54,25 @@
 //! 1. Client A sends a udp message to client B:s ip-address and port.
 //! 2. Client B does the same as client A but with client A:s ip-address and port.
 //! 3. Now they are able to send messages over udp from where they have hole-punched to.
+//! 
+//! ### Progress tracking
 //!
-//! ## Sending
+//! When recieving the reciever remembers what messages have been sent.
+//! It also knows how many that should be sent.
+//! With that info it can tell the sender what messages are unsent.
+//! 
+//! The progress tracking can be stored in memory and on file if the messages are to many.
+//! 
+//! You can **calculate** the memory required for recieving a file, file size / 500 / 8 = size of progress tracker.
+//! 
+//! **Example**: 64gb = 64 000 000 000 / 500 / 8 = 16 000 000 = 16mb
+//! 
+//! The progress tracker for 64gb is 16mb.
+//! 
+//! ### Sending
 //!
-//! It sends the file by sending many messages. When it's done it will send a message.
+//! It sends the file by sending many messages.
+//! When it's done it will send a message telling the reciever that it's done.
 //! If any messages got dropped the reciever will send a list of those.
 //! If the file was recieved correctly the reciever will send a message.
 //!

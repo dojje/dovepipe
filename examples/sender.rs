@@ -20,12 +20,12 @@ async fn main() {
     let reciever = SocketAddr::from_str(&reciever_ip_str).expect("not a valid ip address");
 
     let my_ip = "0.0.0.0:3456";
+    println!("my ip: {}", my_ip);
 
     let sock = UdpSocket::bind(my_ip)
         .await
         .expect("could not bind to address");
 
-    println!("my ip: {}", my_ip);
 
     // Send the file with the send_file funciton
     send_file(&sock, "./examples/file_to_send.txt", reciever)

@@ -303,8 +303,6 @@ pub async fn recv_file(
         let mut new_buf = [0u8; 508];
         let amt = send_unil_recv(&sock, &[9], &ip, &mut new_buf, 500).await?;
 
-
-
         if amt == 9 && new_buf[0] == 8 {
             buf = new_buf;
             break amt;

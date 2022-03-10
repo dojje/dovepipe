@@ -16,12 +16,11 @@ async fn main() {
     let reciever = SocketAddr::from_str(&reciever_ip_str).expect("not a valid ip address");
 
     let my_ip = "0.0.0.0:7890";
+    println!("my ip: {}", my_ip);
 
     let sock = UdpSocket::bind(my_ip)
         .await
         .expect("could not bind to address");
-
-    println!("my ip: {}", my_ip);
 
     recv_file(
         &mut File::create("output_from_recv.txt").expect("could not create output file"),
