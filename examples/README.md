@@ -1,6 +1,6 @@
 # Examples
 
-Demonstrates sending and recieving files
+Demonstrates sending and recieving files by sending the file "file_to_send.txt"
 
 Sender example:
 
