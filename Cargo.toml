@@ -2,8 +2,13 @@
 name = "dovepipe"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+readme = "readme.md"
+repository = "https://github.com/dojje/dovepipe"
+keywords = ["udp", "files", "filesending", "sending files", "sending"]
+description = "used for sending files in rust"
+documentation = "https://docs.rs/dovepipe"
+categories = ["udp", "Command line utilities", "filesending"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 tokio = {version = "1", features = ["full"]}
