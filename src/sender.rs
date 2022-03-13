@@ -1,5 +1,6 @@
 use std::{error, fs::File, net::SocketAddr, thread, time::Duration, sync::Arc};
 
+#[cfg(feature = "logging")]
 use log::{debug};
 use tokio::{net::UdpSocket, time};
 
@@ -24,7 +25,6 @@ pub async fn send_file(
     sock: Arc<UdpSocket>,
     file_name: &str,
     reciever: SocketAddr,
-    logging: bool
 ) -> Result<(), Box<dyn error::Error>> {
     // TODO: Send amount of bytes in file
     // TODO: Add function for sending until request stops
@@ -73,7 +73,8 @@ pub async fn send_file(
 
         }
     }
-    if logging {debug!("has sent file size")}
+    #[cfg(feature = "logging")]
+    debug!("has sent file size");
 
     // Udp messages should be 508 bytes
     // 8 of those bytes are used for checking order of recieving bytes
@@ -101,7 +102,8 @@ pub async fn send_file(
         msg_num += 1;
     }
 
-    if logging {debug!("first pass of sending done")}
+    #[cfg(feature = "logging")]
+    debug!("first pass of sending done");
 
     loop {
         let mut buf = [0u8; 508];

@@ -28,7 +28,7 @@ async fn main() {
 
 
     // Send the file with the send_file funciton
-    send_file(Arc::new(sock), "./examples/file_to_send.txt", reciever, false)
+    send_file(Arc::new(sock), "./examples/file_to_send.txt", reciever)
         .await
         .expect("error when sending file");
 

@@ -10,6 +10,9 @@ documentation = "https://docs.rs/dovepipe"
 categories = ["command-line-utilities"]
 license = "MIT OR Apache-2.0"
 
+[features]
+logging = []
+
 [dependencies]
 tokio = {version = "1", features = ["full"]}
 log = "0.4.14"

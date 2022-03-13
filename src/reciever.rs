@@ -5,7 +5,7 @@ use std::{
     net::SocketAddr,
     time::Duration, sync::Arc,
 };
-
+#[cfg(feature = "logging")]
 use log::debug;
 use tokio::{net::UdpSocket, time};
 
@@ -298,7 +298,7 @@ pub async fn recv_file(
     sock: Arc<UdpSocket>,
     ip: SocketAddr,
     progress_tracking: ProgressTracking,
-    logging: bool,
+    // TODO Make logging into a feature
 ) -> Result<(), Box<dyn error::Error>> {
     let sock_ = sock.clone();
     let holepuncher = tokio::task::spawn(async move {
@@ -312,14 +312,16 @@ pub async fn recv_file(
         }
     });
 
-    if logging {
-        debug!("getting file size");
-    }
+    #[cfg(feature = "logging")]
+    debug!("getting file size");
 
+    // Recieve file size from sender
     let buf: [u8; 508];
     let amt = loop {
         let mut new_buf = [0u8; 508];
         let amt = send_unil_recv(&sock, &[9], &ip, &mut new_buf, 500).await?;
+        #[cfg(feature = "logging")]
+        debug!("got size msg: {:?}", &new_buf[0..amt]);
 
         if amt == 9 && new_buf[0] == 8 {
             buf = new_buf;
@@ -331,10 +333,8 @@ pub async fn recv_file(
     let size_be_bytes = &buf[1..];
     let size = u8s_to_u64(size_be_bytes)?;
 
-    if logging {
-        debug!("size: {}", size);
-    }
-
+    #[cfg(feature = "logging")]
+    debug!("size: {}", size);
     // When the giver think it's done it should say that to the taker
     // the taker should check that it has recieved all packets
     // If not, the taker should send what messages are unsent
