@@ -26,6 +26,9 @@ pub async fn send_file(
     file_name: &str,
     reciever: SocketAddr,
 ) -> Result<(), Box<dyn error::Error>> {
+    #[cfg(feature = "logging")]
+    debug!("reciever ip: {}", reciever);
+
     // TODO: Send amount of bytes in file
     // TODO: Add function for sending until request stops
     // TODO: Make different ways to keep track of progress
