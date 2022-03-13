@@ -2,9 +2,9 @@
 name = "dovepipe"
 version = "0.1.2"
 edition = "2021"
-readme = "readme.md"
+readme = "README.md"
 repository = "https://github.com/dojje/dovepipe"
-keywords = ["udp", "files", "filesending", "sending-files", "sending"]
+keywords = ["udp", "filesharing"]
 description = "used for sending files in rust"
 documentation = "https://docs.rs/dovepipe"
 categories = ["command-line-utilities"]
