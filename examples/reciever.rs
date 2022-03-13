@@ -1,6 +1,6 @@
 use std::{fs::File, io, net::SocketAddr, str::FromStr};
 
-use dovepipe::{reciever::ProgressTracking, recv_file};
+use dovepipe::{reciever::ProgressTracking, recv_file, Source};
 
 #[tokio::main]
 async fn main() {
@@ -18,7 +18,7 @@ async fn main() {
 
     recv_file(
         &mut File::create("output_from_recv.txt").expect("could not create output file"),
-        7890,
+        Source::Port(7890),
         reciever,
         ProgressTracking::Memory,
     )

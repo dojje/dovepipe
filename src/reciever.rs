@@ -1,15 +1,15 @@
+#[cfg(feature = "logging")]
+use log::debug;
 use std::{
     error,
     fs::{remove_file, File, OpenOptions},
     io::{self},
-    net::{SocketAddr, IpAddr, Ipv4Addr},
-    time::Duration, sync::Arc,
+    net::SocketAddr,
+    time::Duration,
 };
-#[cfg(feature = "logging")]
-use log::debug;
-use tokio::{net::UdpSocket, time};
+use tokio::time;
 
-use crate::{read_position, recv, send_unil_recv, u8s_to_u64, write_position};
+use crate::{read_position, recv, send_unil_recv, u8s_to_u64, write_position, Source};
 
 trait ProgressTracker {
     fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>>;
@@ -295,13 +295,11 @@ fn write_msg(
 
 pub async fn recv_file(
     file: &mut File,
-    local_port: u16,
+    recv_source: Source,
     sender: SocketAddr,
     progress_tracking: ProgressTracking,
 ) -> Result<(), Box<dyn error::Error>> {
-    let sock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), local_port);
-    let sock = UdpSocket::bind(sock_addr).await?;
-    let sock = Arc::new(sock);
+    let sock = recv_source.into_socket().await;
 
     let sock_ = sock.clone();
     let holepuncher = tokio::task::spawn(async move {
