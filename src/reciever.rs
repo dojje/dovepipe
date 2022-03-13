@@ -3,7 +3,7 @@ use std::{
     fs::{remove_file, File, OpenOptions},
     io,
     net::SocketAddr,
-    time::Duration,
+    time::Duration, sync::Arc,
 };
 
 use tokio::{net::UdpSocket, time};
@@ -294,10 +294,22 @@ fn write_msg(
 
 pub async fn recv_file(
     file: &mut File,
-    sock: &UdpSocket,
+    sock: Arc<UdpSocket>,
     ip: SocketAddr,
     progress_tracking: ProgressTracking,
 ) -> Result<(), Box<dyn error::Error>> {
+
+    let sock_ = sock.clone();
+    let holepuncher = tokio::task::spawn(async move {
+        let sock = sock_;
+
+        let mut holepunch_interval = time::interval(Duration::from_secs(5));
+        loop {
+            sock.send_to(&[255u8], ip).await.unwrap();
+
+            holepunch_interval.tick().await;
+        }
+    });
     let buf: [u8; 508];
     let amt = loop {
         let mut new_buf = [0u8; 508];
@@ -420,7 +432,7 @@ pub async fn recv_file(
             first = false;
         }
     }
-
+    holepuncher.abort();
     prog_tracker.destruct();
     Ok(())
 }

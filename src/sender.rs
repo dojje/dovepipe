@@ -1,4 +1,4 @@
-use std::{error, fs::File, net::SocketAddr, thread, time::Duration};
+use std::{error, fs::File, net::SocketAddr, thread, time::Duration, sync::Arc};
 
 use tokio::{net::UdpSocket, time};
 
@@ -22,7 +22,7 @@ fn get_file_buf_from_msg_num(
 const SEND_FILE_INTERVAL: u64 = 1500;
 
 pub async fn send_file(
-    sock: &UdpSocket,
+    sock: Arc<UdpSocket>,
     file_name: &str,
     reciever: SocketAddr,
 ) -> Result<(), Box<dyn error::Error>> {

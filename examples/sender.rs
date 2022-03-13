@@ -1,4 +1,4 @@
-use std::{io, net::SocketAddr, str::FromStr};
+use std::{io, net::SocketAddr, str::FromStr, sync::Arc};
 
 use dovepipe::send_file;
 use tokio::net::UdpSocket;
@@ -28,7 +28,7 @@ async fn main() {
 
 
     // Send the file with the send_file funciton
-    send_file(&sock, "./examples/file_to_send.txt", reciever)
+    send_file(Arc::new(sock), "./examples/file_to_send.txt", reciever)
         .await
         .expect("error when sending file");
 
