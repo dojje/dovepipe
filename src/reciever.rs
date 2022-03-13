@@ -318,7 +318,27 @@ pub async fn recv_file(
     let buf: [u8; 508];
     let amt = loop {
         let mut new_buf = [0u8; 508];
-        let amt = send_unil_recv(&sock, &[9], &ip, &mut new_buf, 500).await?;
+
+        // Send message to sender until a messge gets recieved
+        let mut send_interval = time::interval(Duration::from_millis(500));
+        let amt = loop {
+            tokio::select! {
+                _ = send_interval.tick() => {
+                    sock.send_to(&[9], &ip).await?;
+
+                }
+
+                result = sock.recv_from(&mut new_buf) => {
+                    let (amt, _src) = result?;
+                    // if &src != addr {
+                        // continue;
+                    // }
+                    break amt;
+                }
+            }
+        };
+
+
         #[cfg(feature = "logging")]
         debug!("got size msg: {:?}", &new_buf[0..amt]);
 
