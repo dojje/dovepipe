@@ -26,6 +26,7 @@ async fn main() {
         Arc::new(sock),
         reciever,
         ProgressTracking::Memory,
+        false,
     )
     .await
     .expect("error when sending file");

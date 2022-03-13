@@ -6,6 +6,7 @@ use std::{
     time::Duration, sync::Arc,
 };
 
+use log::debug;
 use tokio::{net::UdpSocket, time};
 
 use crate::{read_position, recv, send_unil_recv, u8s_to_u64, write_position};
@@ -297,8 +298,8 @@ pub async fn recv_file(
     sock: Arc<UdpSocket>,
     ip: SocketAddr,
     progress_tracking: ProgressTracking,
+    logging: bool,
 ) -> Result<(), Box<dyn error::Error>> {
-
     let sock_ = sock.clone();
     let holepuncher = tokio::task::spawn(async move {
         let sock = sock_;
@@ -310,6 +311,11 @@ pub async fn recv_file(
             holepunch_interval.tick().await;
         }
     });
+
+    if logging {
+        debug!("getting file size");
+    }
+
     let buf: [u8; 508];
     let amt = loop {
         let mut new_buf = [0u8; 508];
@@ -324,6 +330,10 @@ pub async fn recv_file(
 
     let size_be_bytes = &buf[1..];
     let size = u8s_to_u64(size_be_bytes)?;
+
+    if logging {
+        debug!("size: {}", size);
+    }
 
     // When the giver think it's done it should say that to the taker
     // the taker should check that it has recieved all packets
@@ -361,9 +371,6 @@ pub async fn recv_file(
                             let buf = &buf[0..amt];
 
                             if buf[0] == 5 {
-                                #[cfg(feature = "sim_wan")]
-                                send_maybe(&sock, &[7], &ip).await?;
-                                #[cfg(not(feature = "sim_wan"))]
                                 sock.send_to(&[7], ip).await?;
 
                             }

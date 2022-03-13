@@ -141,9 +141,6 @@ async fn send_unil_recv(
     let amt = loop {
         tokio::select! {
             _ = send_interval.tick() => {
-                #[cfg(feature = "sim_wan")]
-                send_maybe(&sock, msg, addr).await?;
-                #[cfg(not(feature = "sim_wan"))]
                 sock.send_to(msg, addr).await?;
 
             }

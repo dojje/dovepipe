@@ -1,9 +1,8 @@
 use std::{error, fs::File, net::SocketAddr, thread, time::Duration, sync::Arc};
 
+use log::{debug};
 use tokio::{net::UdpSocket, time};
 
-#[cfg(feature = "sim_wan")]
-use shared::send_maybe;
 
 use crate::{get_buf, punch_hole, read_position, send_unil_recv, u8s_to_u64};
 
@@ -25,6 +24,7 @@ pub async fn send_file(
     sock: Arc<UdpSocket>,
     file_name: &str,
     reciever: SocketAddr,
+    logging: bool
 ) -> Result<(), Box<dyn error::Error>> {
     // TODO: Send amount of bytes in file
     // TODO: Add function for sending until request stops
@@ -73,6 +73,7 @@ pub async fn send_file(
 
         }
     }
+    if logging {debug!("has sent file size")}
 
     // Udp messages should be 508 bytes
     // 8 of those bytes are used for checking order of recieving bytes
@@ -90,9 +91,6 @@ pub async fn send_file(
 
         send_interval.tick().await;
 
-        #[cfg(feature = "sim_wan")]
-        send_maybe(&sock, &buf, &reciever).await?;
-        #[cfg(not(feature = "sim_wan"))]
         sock.send_to(&buf, reciever).await?;
 
         offset += 500;
@@ -103,9 +101,11 @@ pub async fn send_file(
         msg_num += 1;
     }
 
+    if logging {debug!("first pass of sending done")}
+
     loop {
         let mut buf = [0u8; 508];
-        let amt = send_unil_recv(&sock, &[5], &reciever, &mut buf, 10).await?;
+        let amt = send_unil_recv(&sock, &[5], &reciever, &mut buf, 100).await?;
 
         // This will be an array of u64s with missed things
         // The first will be a message
@@ -127,9 +127,6 @@ pub async fn send_file(
             let buf = get_buf(&missed_msg, file_buf);
 
             send_interval.tick().await;
-            #[cfg(feature = "sim_wan")]
-            send_maybe(&sock, &buf, &reciever).await?;
-            #[cfg(not(feature = "sim_wan"))]
             sock.send_to(&buf, reciever).await?;
         }
     }
