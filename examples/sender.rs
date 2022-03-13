@@ -1,6 +1,6 @@
 use std::{io, net::SocketAddr, str::FromStr};
 
-use dovepipe::send_file;
+use dovepipe::{send_file, Source};
 
 #[tokio::main]
 async fn main() {
@@ -21,7 +21,7 @@ async fn main() {
     let reciever = SocketAddr::from_str(&reciever_ip_str).expect("not a valid ip address");
 
     // Send the file with the send_file funciton
-    send_file(port, "./examples/file_to_send.txt", reciever)
+    send_file(Source::Port(port), "./examples/file_to_send.txt", reciever)
         .await
         .expect("error when sending file");
 }
