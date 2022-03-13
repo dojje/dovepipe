@@ -4,12 +4,8 @@
 //! **Sender example**
 //!
 //! ```
-//! let sock = UdpSocket::bind("0.0.0.0:3456")
-//!     .await
-//!     .expect("could not bind to address");
-
 //! // Send the file with the send_file funciton
-//! send_file(&sock, "recieve_destination", SocketAddr::from_str("127.0.0.1:7890"))
+//! send_file(Source::Port(port), "./examples/file_to_send.txt", reciever)
 //!     .await
 //!     .expect("error when sending file");
 //! ```
@@ -18,14 +14,10 @@
 //! **Reciever example**
 //!
 //! ```
-//! let sock = UdpSocket::bind("0.0.0.0:7890")
-//!     .await
-//!     .expect("could not bind to address");
-//!
 //! recv_file(
-//!     &mut File::create("recieve_destination").expect("could not create output file"),
-//!     &sock,
-//!     SocketAddr::from_str("127.0.0.1:3456"),
+//!     &mut File::create("output_from_recv.txt").expect("could not create output file"),
+//!     Source::Port(7890),
+//!     reciever,
 //!     ProgressTracking::Memory,
 //! )
 //! .await
