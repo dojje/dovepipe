@@ -29,8 +29,17 @@ pub async fn send_file(
     // TODO: Send amount of bytes in file
     // TODO: Add function for sending until request stops
     // TODO: Make different ways to keep track of progress
+    let sock_ = sock.clone();
+    let holepuncher = tokio::task::spawn(async move {
+        let sock = sock_;
 
-    punch_hole(&sock, reciever).await?;
+        let mut holepunch_interval = time::interval(Duration::from_secs(5));
+        loop {
+            punch_hole(&sock, reciever).await.unwrap();
+
+            holepunch_interval.tick().await;
+        }
+    });
 
     thread::sleep(Duration::from_millis(1000));
 
@@ -121,6 +130,7 @@ pub async fn send_file(
         let buf = &buf[0..amt];
         if buf[0] == 7 {
             // 6 is missed
+            holepuncher.abort();
             return Ok(());
         }
 
@@ -139,4 +149,5 @@ pub async fn send_file(
             sock.send_to(&buf, reciever).await?;
         }
     }
+
 }
