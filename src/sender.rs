@@ -1,4 +1,4 @@
-use std::{error, fs::File, net::SocketAddr, thread, time::Duration, sync::Arc};
+use std::{error, fs::File, net::{SocketAddr, IpAddr, Ipv4Addr}, thread, time::Duration, sync::Arc};
 
 #[cfg(feature = "logging")]
 use log::{debug};
@@ -22,12 +22,16 @@ fn get_file_buf_from_msg_num(
 const SEND_FILE_INTERVAL: u64 = 1500;
 
 pub async fn send_file(
-    sock: Arc<UdpSocket>,
+    local_port: u16,
     file_name: &str,
     reciever: SocketAddr,
 ) -> Result<(), Box<dyn error::Error>> {
     #[cfg(feature = "logging")]
     debug!("reciever ip: {}", reciever);
+
+    let sock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), local_port);
+    let sock = UdpSocket::bind(sock_addr).await?;
+    let sock = Arc::new(sock);
 
     // TODO: Send amount of bytes in file
     // TODO: Add function for sending until request stops
