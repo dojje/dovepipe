@@ -298,7 +298,6 @@ pub async fn recv_file(
     sock: Arc<UdpSocket>,
     ip: SocketAddr,
     progress_tracking: ProgressTracking,
-    // TODO Make logging into a feature
 ) -> Result<(), Box<dyn error::Error>> {
     let sock_ = sock.clone();
     let holepuncher = tokio::task::spawn(async move {

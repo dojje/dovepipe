@@ -56,6 +56,8 @@ pub async fn send_file(
         let sleep = time::sleep(Duration::from_millis(1500));
         tokio::select! {
             _ = sleep => {
+                #[cfg(feature = "logging")]
+                debug!("has sent = {}", has_sent);
                 if has_sent {
                     break;
                 }
@@ -64,6 +66,9 @@ pub async fn send_file(
             amt = sock.recv(&mut buf) => {
                 let amt = amt?;
                 let buf = &buf[0..amt];
+
+                #[cfg(feature = "logging")]
+                debug!("got msg: {:?}", buf);
 
                 if buf.len() == 1 && buf[0] == 9 {
                     sock.send_to(&msg, reciever).await?;
