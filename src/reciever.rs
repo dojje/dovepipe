@@ -1,8 +1,8 @@
 use std::{
     error,
     fs::{remove_file, File, OpenOptions},
-    io,
-    net::SocketAddr,
+    io::{self},
+    net::{SocketAddr, IpAddr, Ipv4Addr},
     time::Duration, sync::Arc,
 };
 #[cfg(feature = "logging")]
@@ -295,17 +295,21 @@ fn write_msg(
 
 pub async fn recv_file(
     file: &mut File,
-    sock: Arc<UdpSocket>,
-    ip: SocketAddr,
+    local_port: u16,
+    sender: SocketAddr,
     progress_tracking: ProgressTracking,
 ) -> Result<(), Box<dyn error::Error>> {
+    let sock_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), local_port);
+    let sock = UdpSocket::bind(sock_addr).await?;
+    let sock = Arc::new(sock);
+
     let sock_ = sock.clone();
     let holepuncher = tokio::task::spawn(async move {
         let sock = sock_;
 
         let mut holepunch_interval = time::interval(Duration::from_secs(5));
         loop {
-            sock.send_to(&[255u8], ip).await.unwrap();
+            sock.send_to(&[255u8], sender).await.unwrap();
 
             holepunch_interval.tick().await;
         }
@@ -320,24 +324,7 @@ pub async fn recv_file(
         let mut new_buf = [0u8; 508];
 
         // Send message to sender until a messge gets recieved
-        let mut send_interval = time::interval(Duration::from_millis(500));
-        let amt = loop {
-            tokio::select! {
-                _ = send_interval.tick() => {
-                    sock.send_to(&[9], &ip).await?;
-
-                }
-
-                result = sock.recv_from(&mut new_buf) => {
-                    let (amt, _src) = result?;
-                    // if &src != addr {
-                        // continue;
-                    // }
-                    break amt;
-                }
-            }
-        };
-
+        let amt = send_unil_recv(&*sock, &[9], &sender, &mut new_buf, 500).await?;
 
         #[cfg(feature = "logging")]
         debug!("got size msg: {:?}", &new_buf[0..amt]);
@@ -385,12 +372,12 @@ pub async fn recv_file(
                             break;
                         }
 
-                        amt = recv(&sock, &ip, &mut buf) => {
+                        amt = recv(&sock, &sender, &mut buf) => {
                             let amt = amt?;
                             let buf = &buf[0..amt];
 
                             if buf[0] == 5 {
-                                sock.send_to(&[7], ip).await?;
+                                sock.send_to(&[7], sender).await?;
 
                             }
 
@@ -404,7 +391,7 @@ pub async fn recv_file(
 
             let mut buf = [0u8; 508];
             loop {
-                let amt = send_unil_recv(&sock, &dropped_msg, &ip, &mut buf, 100).await?;
+                let amt = send_unil_recv(&sock, &dropped_msg, &sender, &mut buf, 100).await?;
                 let msg_buf = &buf[0..amt];
                 // If it's the same message
                 if msg_buf.len() != 1 && msg_buf[0] != 5 {
@@ -431,7 +418,7 @@ pub async fn recv_file(
                         break;
                     }
 
-                    amt = recv(&sock, &ip, &mut buf) => {
+                    amt = recv(&sock, &sender, &mut buf) => {
                         let amt = amt?;
                         amt
                     }
