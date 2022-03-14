@@ -4,20 +4,30 @@
 //! **Sender example**
 //!
 //! ```
+//! let port = 3456;
+//! println!("my ip: 127.0.0.1:{}", port);
+//!
 //! // Send the file with the send_file funciton
-//! send_file(Source::Port(port), "./examples/file_to_send.txt", reciever)
-//!     .await
-//!     .expect("error when sending file");
+//! send_file(
+//!     Source::Port(port),
+//!     "./examples/file_to_send.txt",
+//!     "127.0.0.1:7890",
+//! )
+//! .await
+//! .expect("error when sending file");
 //! ```
 //! \
 //!
 //! **Reciever example**
 //!
 //! ```
+//! let port = 7890;
+//! println!("my ip: 127.0.0.1:{}", port);
+//!
 //! recv_file(
+//!     Source::Port(port),
 //!     &mut File::create("output_from_recv.txt").expect("could not create output file"),
-//!     Source::Port(7890),
-//!     reciever,
+//!     "127.0.0.1:3456",
 //!     ProgressTracking::Memory,
 //! )
 //! .await
@@ -79,7 +89,10 @@ use std::{
     time::Duration,
 };
 
-use tokio::{net::UdpSocket, time};
+use tokio::{
+    net::{lookup_host, ToSocketAddrs, UdpSocket},
+    time,
+};
 
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::FileExt;
@@ -123,10 +136,10 @@ fn u8s_to_u64(nums: &[u8]) -> io::Result<u64> {
     Ok(big_number)
 }
 
-async fn send_unil_recv(
+async fn send_unil_recv<T: ToSocketAddrs>(
     sock: &UdpSocket,
     msg: &[u8],
-    addr: &SocketAddr,
+    addr: &T,
     buf: &mut [u8],
     interval: u64,
 ) -> Result<usize, Box<dyn error::Error>> {
@@ -140,7 +153,7 @@ async fn send_unil_recv(
 
             result = sock.recv_from(buf) => {
                 let (amt, src) = result?;
-                if &src != addr {
+                if &src != &lookup_host(addr).await?.next().unwrap() {
                     continue;
                 }
                 break amt;
@@ -151,7 +164,7 @@ async fn send_unil_recv(
     Ok(amt)
 }
 
-async fn punch_hole(sock: &UdpSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> {
+async fn punch_hole<T: ToSocketAddrs>(sock: &UdpSocket, addr: T) -> Result<(), Box<dyn Error>> {
     sock.send_to(&[255u8], addr).await?;
 
     Ok(())
@@ -185,15 +198,14 @@ fn write_position(file: &File, buf: &[u8], offset: u64) -> Result<usize, Box<dyn
     Ok(amt)
 }
 
-async fn recv(
-    sock: &UdpSocket,
-    from: &SocketAddr,
-    buf: &mut [u8],
-) -> Result<usize, Box<dyn Error>> {
+async fn recv<T>(sock: &UdpSocket, from: &T, buf: &mut [u8]) -> Result<usize, Box<dyn Error>>
+where
+    T: ToSocketAddrs,
+{
     loop {
         let (amt, src) = sock.recv_from(buf).await?;
 
-        if &src == from {
+        if &src == &lookup_host(from).await?.next().unwrap() {
             return Ok(amt);
         }
     }

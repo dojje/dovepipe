@@ -4,10 +4,9 @@ use std::{
     error,
     fs::{remove_file, File, OpenOptions},
     io::{self},
-    net::SocketAddr,
     time::Duration,
 };
-use tokio::time;
+use tokio::{net::ToSocketAddrs, time};
 
 use crate::{read_position, recv, send_unil_recv, u8s_to_u64, write_position, Source};
 
@@ -293,17 +292,27 @@ fn write_msg(
     Ok(())
 }
 
-pub async fn recv_file(
+/// Used for recieving a file.
+///
+/// ```
+/// ```
+///
+pub async fn recv_file<T>(
+    source: Source,
     file: &mut File,
-    recv_source: Source,
-    sender: SocketAddr,
+    sender: T,
     progress_tracking: ProgressTracking,
-) -> Result<(), Box<dyn error::Error>> {
-    let sock = recv_source.into_socket().await;
+) -> Result<(), Box<dyn error::Error>>
+where
+    T: 'static + Clone + ToSocketAddrs + std::marker::Send + Copy, // This many traits is probalbly unnececery but it works
+{
+    let sock = source.into_socket().await;
 
     let sock_ = sock.clone();
+    let sender_ = sender.clone();
     let holepuncher = tokio::task::spawn(async move {
         let sock = sock_;
+        let sender = sender_;
 
         let mut holepunch_interval = time::interval(Duration::from_secs(5));
         loop {
@@ -444,7 +453,7 @@ pub async fn recv_file(
         }
     }
     holepuncher.abort();
-    prog_tracker.destruct();
+
     Ok(())
 }
 

@@ -1,8 +1,8 @@
-use std::{error, fs::File, net::SocketAddr, thread, time::Duration};
+use std::{error, fs::File, thread, time::Duration};
 
 #[cfg(feature = "logging")]
 use log::debug;
-use tokio::time;
+use tokio::{net::ToSocketAddrs, time};
 
 use crate::{get_buf, punch_hole, read_position, send_unil_recv, u8s_to_u64, Source};
 
@@ -20,10 +20,10 @@ fn get_file_buf_from_msg_num(
 // Intervals
 const SEND_FILE_INTERVAL: u64 = 1500;
 
-pub async fn send_file(
+pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy>(
     source: Source,
     file_name: &str,
-    reciever: SocketAddr,
+    reciever: T,
 ) -> Result<(), Box<dyn error::Error>> {
     #[cfg(feature = "logging")]
     debug!("reciever ip: {}", reciever);
@@ -34,12 +34,13 @@ pub async fn send_file(
     // TODO: Add function for sending until request stops
     // TODO: Make different ways to keep track of progress
     let sock_ = sock.clone();
+    let reciever_ = reciever.clone();
     let holepuncher = tokio::task::spawn(async move {
         let sock = sock_;
 
         let mut holepunch_interval = time::interval(Duration::from_secs(5));
         loop {
-            punch_hole(&sock, reciever).await.unwrap();
+            punch_hole(&sock, reciever_).await.unwrap();
 
             holepunch_interval.tick().await;
         }
