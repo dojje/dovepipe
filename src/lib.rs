@@ -212,6 +212,10 @@ where
     }
 }
 
+/// This is the source of sending or recieving a file
+/// It always uses an `Arc`ed udp socket or `Arc<UdpSocket>`.
+/// 
+/// The Source enum gives you different ways of getting `Arc<UdpSocket>`. 
 pub enum Source {
     SocketArc(Arc<UdpSocket>),
     Socket(UdpSocket),

@@ -310,6 +310,7 @@ fn write_msg(
 /// .await
 /// .expect("error when sending file");
 /// ```
+/// This takes in a source which is the UdpSocket to send recieve from. 
 /// 
 /// This looks for any senders on port 7890 on ip 127.0.0.1.
 /// *Note: 127.0.0.1 is the same as localhost*
