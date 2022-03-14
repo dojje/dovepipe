@@ -292,10 +292,29 @@ fn write_msg(
     Ok(())
 }
 
-/// Used for recieving a file.
+/// # This is used to recieve files
+/// 
+/// ## Sending example
+/// 
+/// This is taken from the official examples
+/// ```
+/// let port = 7890;
+/// println!("my ip: 127.0.0.1:{}", port);
 ///
+/// recv_file(
+///     Source::Port(port),
+///     &mut File::create("output_from_recv.txt").expect("could not create output file"),
+///     "127.0.0.1:3456",
+///     ProgressTracking::Memory,
+/// )
+/// .await
+/// .expect("error when sending file");
 /// ```
-/// ```
+/// 
+/// This looks for any senders on port 7890 on ip 127.0.0.1.
+/// *Note: 127.0.0.1 is the same as localhost*
+/// 
+/// When it finds one it will send the file 
 ///
 pub async fn recv_file<T>(
     source: Source,

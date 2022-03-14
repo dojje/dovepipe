@@ -20,6 +20,24 @@ fn get_file_buf_from_msg_num(
 // Intervals
 const SEND_FILE_INTERVAL: u64 = 1500;
 
+/// # This is used to send files
+/// 
+/// ## Example
+/// ```
+/// let port = 3456;
+/// println!("my ip: 127.0.0.1:{}", port);
+/// 
+/// send_file(
+///     Source::Port(port),
+///     "./examples/file_to_send.txt",
+///     "127.0.0.1:7890",
+/// )
+/// .await
+/// .expect("error when sending file");
+/// ```
+/// 
+/// This will listen for any recievers on port 3456 on ip 127.0.0.1. *Note: localhost and 127.0.0.1 are the same.*
+/// 
 pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy>(
     source: Source,
     file_name: &str,

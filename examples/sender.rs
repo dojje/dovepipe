@@ -1,4 +1,4 @@
-use dovepipe::{send_file, Source};
+use dovepipe::{Source, send_file};
 
 #[tokio::main]
 async fn main() {
