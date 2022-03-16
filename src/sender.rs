@@ -40,7 +40,7 @@ const SEND_FILE_INTERVAL: u64 = 1500;
 /// 
 /// This will listen for any recievers on port 3456 on ip 127.0.0.1. *Note: localhost and 127.0.0.1 are the same.*
 /// 
-pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy>(
+pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::fmt::Display>(
     source: Source,
     file_name: &str,
     reciever: T,
