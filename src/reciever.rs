@@ -1,5 +1,7 @@
 #[cfg(feature = "logging")]
 use log::debug;
+#[cfg(feature = "logging")]
+use log::info;
 use std::{
     error,
     fs::{remove_file, File, OpenOptions},
@@ -277,7 +279,7 @@ fn write_msg(
     buf: &[u8],
     out_file: &File,
     prog_tracker: &mut Box<dyn ProgressTracker>,
-) -> Result<(), Box<dyn error::Error>> {
+) -> Result<u64, Box<dyn error::Error>> {
     // Get msg num
     let msg_num = u8s_to_u64(&buf[0..8])?;
 
@@ -289,7 +291,7 @@ fn write_msg(
 
     prog_tracker.recv_msg(msg_num)?;
 
-    Ok(())
+    Ok(msg_num)
 }
 
 /// # This is used to recieve files
@@ -468,7 +470,15 @@ where
                 continue;
             }
 
+            // Remember msg num if logging is on
+            // This is to log progress
+            #[cfg(feature = "logging")]
+            let msg_num = write_msg(buf, file, &mut prog_tracker)?;
+            #[cfg(not(feature = "logging"))]
             write_msg(buf, file, &mut prog_tracker)?;
+            
+            #[cfg(feature = "logging")]
+            info!("msg {} / {}, {}%", msg_num, size, msg_num * 100 / size);
             first = false;
         }
     }

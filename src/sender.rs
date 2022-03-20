@@ -2,6 +2,8 @@ use std::{error, fs::File, thread, time::Duration};
 
 #[cfg(feature = "logging")]
 use log::debug;
+#[cfg(feature = "logging")]
+use log::info;
 use tokio::{net::ToSocketAddrs, time};
 
 use crate::{get_buf, punch_hole, read_position, send_unil_recv, u8s_to_u64, Source};
@@ -16,9 +18,6 @@ fn get_file_buf_from_msg_num(
 
     Ok(amt)
 }
-
-// Intervals
-const SEND_FILE_INTERVAL: u64 = 1500;
 
 /// # This is used to send files
 /// 
@@ -122,14 +121,11 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
     let mut offset = 0;
     let mut msg_num: u64 = 0;
 
-    let mut send_interval = time::interval(Duration::from_micros(SEND_FILE_INTERVAL));
     loop {
         let mut file_buf = [0u8; 500];
         let amt = read_position(&input_file, &mut file_buf, offset)?;
 
         let buf = get_buf(&msg_num, &file_buf[0..amt]);
-
-        send_interval.tick().await;
 
         sock.send_to(&buf, reciever).await?;
 
@@ -137,14 +133,15 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         if offset >= file_len {
             break;
         }
+        #[cfg(feature = "logging")]
+        info!("Progress: {}%", offset * 100 / file_len);
 
         msg_num += 1;
     }
 
-    #[cfg(feature = "logging")]
-    debug!("first pass of sending done");
-
     loop {
+        #[cfg(feature = "logging")]
+        info!("Sending done, getting dropped messages");
         let mut buf = [0u8; 508];
         let amt = send_unil_recv(&sock, &[5], &reciever, &mut buf, 100).await?;
 
@@ -154,21 +151,26 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         if buf[0] == 7 {
             // 6 is missed
             holepuncher.abort();
+            #[cfg(feature = "logging")]
+            info!("No dropped messages left, finishing...");
             return Ok(());
         }
 
         let missed = &buf[1..];
+        
+        #[cfg(feature = "logging")]
+        info!("Dropped messages: {}", missed.len() / 8);
         for i in 0..(missed.len() / 8) {
             let j = i * 8;
             // Convert bytes to offset
             let missed_msg = u8s_to_u64(&missed[j..j + 8])?;
+
             let mut file_buf = [0u8; 500];
             // Read from file
             let amt = get_file_buf_from_msg_num(missed_msg, &input_file, 500, &mut file_buf)?;
             let file_buf = &file_buf[0..amt];
             let buf = get_buf(&missed_msg, file_buf);
 
-            send_interval.tick().await;
             sock.send_to(&buf, reciever).await?;
         }
     }
