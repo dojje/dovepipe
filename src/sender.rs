@@ -4,7 +4,7 @@ use std::{error, time::Duration};
 use log::debug;
 #[cfg(feature = "logging")]
 use log::info;
-use tokio::{net::ToSocketAddrs, time, fs::File};
+use tokio::{fs::File, net::ToSocketAddrs, time};
 
 use crate::{get_buf, punch_hole, read_position, send_unil_recv, u8s_to_u64, Source};
 
@@ -21,12 +21,12 @@ where
 }
 
 /// # This is used to send files
-/// 
+///
 /// ## Example
 /// ```
 /// let port = 3456;
 /// println!("my ip: 127.0.0.1:{}", port);
-/// 
+///
 /// send_file(
 ///     Source::Port(port),
 ///     "./examples/file_to_send.txt",
@@ -35,11 +35,11 @@ where
 /// .await
 /// .expect("error when sending file");
 /// ```
-/// 
+///
 /// This takes in a source which is the udp socket to send from
-/// 
+///
 /// This will listen for any recievers on port 3456 on ip 127.0.0.1. *Note: localhost and 127.0.0.1 are the same.*
-/// 
+///
 pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::fmt::Display>(
     source: Source,
     file_name: &str,
@@ -157,7 +157,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         }
 
         let missed = &buf[1..];
-        
+
         #[cfg(feature = "logging")]
         info!("Dropped messages: {}", missed.len() / 8);
         for i in 0..(missed.len() / 8) {
@@ -166,7 +166,8 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
             let missed_msg = u8s_to_u64(&missed[j..j + 8])?;
 
             // Read from file
-            let (file_buf, amt) = get_file_buf_from_msg_num(missed_msg, &input_file, 500, [0u8; 500]).await?;
+            let (file_buf, amt) =
+                get_file_buf_from_msg_num(missed_msg, &input_file, 500, [0u8; 500]).await?;
             let file_buf = &file_buf[0..amt];
             let buf = get_buf(&missed_msg, file_buf);
 

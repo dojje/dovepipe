@@ -83,22 +83,28 @@ use std::{
     error,
     error::Error,
     io::{self},
+    mem::ManuallyDrop,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
-    mem::ManuallyDrop,
 };
 
 use tokio::{
-    net::{lookup_host, ToSocketAddrs, UdpSocket},
     fs::File,
+    net::{lookup_host, ToSocketAddrs, UdpSocket},
     time,
 };
 
 #[cfg(target_os = "linux")]
-use std::os::unix::{io::{AsRawFd, FromRawFd}, fs::FileExt};
+use std::os::unix::{
+    fs::FileExt,
+    io::{AsRawFd, FromRawFd},
+};
 #[cfg(target_os = "windows")]
-use std::os::windows::{fs::FileExt, io::{AsRawHandle, FromRawHandle}};
+use std::os::windows::{
+    fs::FileExt,
+    io::{AsRawHandle, FromRawHandle},
+};
 
 pub mod reciever;
 pub mod sender;
@@ -166,7 +172,10 @@ async fn send_unil_recv<T: ToSocketAddrs>(
     Ok(amt)
 }
 
-async fn punch_hole<T: ToSocketAddrs>(sock: &UdpSocket, addr: T) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn punch_hole<T: ToSocketAddrs>(
+    sock: &UdpSocket,
+    addr: T,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     sock.send_to(&[255u8], addr).await?;
 
     Ok(())
@@ -180,7 +189,11 @@ fn get_buf(msg_num: &u64, file_buf: &[u8]) -> Vec<u8> {
     full
 }
 
-async fn read_position<Buf>(file: &File, mut buf: Buf, offset: u64) -> Result<(Buf, usize), Box<dyn error::Error + Send + Sync>>
+async fn read_position<Buf>(
+    file: &File,
+    mut buf: Buf,
+    offset: u64,
+) -> Result<(Buf, usize), Box<dyn error::Error + Send + Sync>>
 where
     Buf: AsMut<[u8]> + Send + 'static,
 {
@@ -196,7 +209,11 @@ where
     .await
 }
 
-async fn write_position<Buf>(file: &File, buf: Buf, offset: u64) -> Result<usize, Box<dyn error::Error + Send + Sync>>
+async fn write_position<Buf>(
+    file: &File,
+    buf: Buf,
+    offset: u64,
+) -> Result<usize, Box<dyn error::Error + Send + Sync>>
 where
     Buf: AsRef<[u8]> + Send + 'static,
 {
@@ -228,10 +245,16 @@ where
     // We don't own the file descriptor so we must not drop the file
     let file = ManuallyDrop::new(file);
 
-    tokio::task::spawn_blocking(move || f(&*file)).await.unwrap()
+    tokio::task::spawn_blocking(move || f(&*file))
+        .await
+        .unwrap()
 }
 
-async fn recv<T>(sock: &UdpSocket, from: &T, buf: &mut [u8]) -> Result<usize, Box<dyn Error + Send + Sync>>
+async fn recv<T>(
+    sock: &UdpSocket,
+    from: &T,
+    buf: &mut [u8],
+) -> Result<usize, Box<dyn Error + Send + Sync>>
 where
     T: ToSocketAddrs,
 {
@@ -246,8 +269,8 @@ where
 
 /// This is the source of sending or recieving a file
 /// It always uses an `Arc`ed udp socket or `Arc<UdpSocket>`.
-/// 
-/// The Source enum gives you different ways of getting `Arc<UdpSocket>`. 
+///
+/// The Source enum gives you different ways of getting `Arc<UdpSocket>`.
 pub enum Source {
     SocketArc(Arc<UdpSocket>),
     Socket(UdpSocket),

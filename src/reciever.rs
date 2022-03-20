@@ -1,14 +1,18 @@
+use async_trait::async_trait;
 #[cfg(feature = "logging")]
 use log::debug;
 #[cfg(feature = "logging")]
 use log::info;
-use async_trait::async_trait;
 use std::{
     error,
     io::{self},
     time::Duration,
 };
-use tokio::{net::ToSocketAddrs, time, fs::{remove_file, File, OpenOptions}};
+use tokio::{
+    fs::{remove_file, File, OpenOptions},
+    net::ToSocketAddrs,
+    time,
+};
 
 use crate::{read_position, recv, send_unil_recv, u8s_to_u64, write_position, Source};
 
@@ -297,9 +301,9 @@ async fn write_msg(
 }
 
 /// # This is used to recieve files
-/// 
+///
 /// ## Sending example
-/// 
+///
 /// This is taken from the official examples
 /// ```
 /// let port = 7890;
@@ -314,12 +318,12 @@ async fn write_msg(
 /// .await
 /// .expect("error when sending file");
 /// ```
-/// This takes in a source which is the UdpSocket to send recieve from. 
-/// 
+/// This takes in a source which is the UdpSocket to send recieve from.
+///
 /// This looks for any senders on port 7890 on ip 127.0.0.1.
 /// *Note: 127.0.0.1 is the same as localhost*
-/// 
-/// When it finds one it will send the file 
+///
+/// When it finds one it will send the file
 ///
 pub async fn recv_file<T>(
     source: Source,
@@ -380,7 +384,9 @@ where
     // Create index file
     // TODO Check so that file doesn't already exist
     let mut prog_tracker: Box<dyn ProgressTracker> = match progress_tracking {
-        ProgressTracking::File(filename) => Box::new(FileProgTrack::new(filename, size).await.unwrap()),
+        ProgressTracking::File(filename) => {
+            Box::new(FileProgTrack::new(filename, size).await.unwrap())
+        }
         ProgressTracking::Memory => Box::new(MemProgTracker::new(size)),
     };
 
@@ -478,7 +484,7 @@ where
             let msg_num = write_msg(buf, file, &mut prog_tracker)?;
             #[cfg(not(feature = "logging"))]
             write_msg(buf, file, &mut prog_tracker).await?;
-            
+
             #[cfg(feature = "logging")]
             info!("msg {} / {}, {}%", msg_num, size, msg_num * 100 / size);
             first = false;

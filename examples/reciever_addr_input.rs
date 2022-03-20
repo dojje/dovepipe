@@ -19,7 +19,9 @@ async fn main() {
 
     recv_file(
         Source::Port(7890),
-        &mut File::create("output_from_recv.txt").await.expect("could not create output file"),
+        &mut File::create("output_from_recv.txt")
+            .await
+            .expect("could not create output file"),
         reciever,
         ProgressTracking::Memory,
     )

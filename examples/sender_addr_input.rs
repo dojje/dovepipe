@@ -1,6 +1,6 @@
 use std::{io, net::SocketAddr, str::FromStr};
 
-use dovepipe::{Source, send_file};
+use dovepipe::{send_file, Source};
 
 #[tokio::main]
 async fn main() {
