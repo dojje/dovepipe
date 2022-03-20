@@ -82,22 +82,23 @@
 use std::{
     error,
     error::Error,
-    fs::File,
     io::{self},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
+    mem::ManuallyDrop,
 };
 
 use tokio::{
     net::{lookup_host, ToSocketAddrs, UdpSocket},
+    fs::File,
     time,
 };
 
 #[cfg(target_os = "linux")]
-use std::os::unix::fs::FileExt;
+use std::os::unix::{io::{AsRawFd, FromRawFd}, fs::FileExt};
 #[cfg(target_os = "windows")]
-use std::os::windows::prelude::FileExt;
+use std::os::windows::{fs::FileExt, io::{AsRawHandle, FromRawHandle}};
 
 pub mod reciever;
 pub mod sender;
@@ -143,7 +144,7 @@ async fn send_unil_recv<T: ToSocketAddrs>(
     addr: &T,
     buf: &mut [u8],
     interval: u64,
-) -> Result<usize, Box<dyn error::Error>> {
+) -> Result<usize, Box<dyn error::Error + Send + Sync>> {
     let mut send_interval = time::interval(Duration::from_millis(interval));
     let amt = loop {
         tokio::select! {
@@ -165,7 +166,7 @@ async fn send_unil_recv<T: ToSocketAddrs>(
     Ok(amt)
 }
 
-async fn punch_hole<T: ToSocketAddrs>(sock: &UdpSocket, addr: T) -> Result<(), Box<dyn Error>> {
+async fn punch_hole<T: ToSocketAddrs>(sock: &UdpSocket, addr: T) -> Result<(), Box<dyn Error + Send + Sync>> {
     sock.send_to(&[255u8], addr).await?;
 
     Ok(())
@@ -179,27 +180,58 @@ fn get_buf(msg_num: &u64, file_buf: &[u8]) -> Vec<u8> {
     full
 }
 
-fn read_position(file: &File, buf: &mut [u8], offset: u64) -> Result<usize, Box<dyn error::Error>> {
-    #[cfg(target_os = "linux")]
-    let amt = file.read_at(buf, offset)?;
+async fn read_position<Buf>(file: &File, mut buf: Buf, offset: u64) -> Result<(Buf, usize), Box<dyn error::Error + Send + Sync>>
+where
+    Buf: AsMut<[u8]> + Send + 'static,
+{
+    with_std_file(file, move |file| {
+        #[cfg(target_os = "linux")]
+        let amt = file.read_at(buf.as_mut(), offset)?;
 
-    #[cfg(target_os = "windows")]
-    let amt = file.seek_read(buf, offset)?;
+        #[cfg(target_os = "windows")]
+        let amt = file.seek_read(buf.as_mut(), offset)?;
 
-    Ok(amt)
+        Ok((buf, amt))
+    })
+    .await
 }
 
-fn write_position(file: &File, buf: &[u8], offset: u64) -> Result<usize, Box<dyn error::Error>> {
-    #[cfg(target_os = "linux")]
-    let amt = file.write_at(&buf, offset)?;
+async fn write_position<Buf>(file: &File, buf: Buf, offset: u64) -> Result<usize, Box<dyn error::Error + Send + Sync>>
+where
+    Buf: AsRef<[u8]> + Send + 'static,
+{
+    with_std_file(file, move |file| {
+        #[cfg(target_os = "linux")]
+        let amt = file.write_at(buf.as_ref(), offset)?;
 
-    #[cfg(target_os = "windows")]
-    let amt = file.seek_write(&buf, offset)?;
+        #[cfg(target_os = "windows")]
+        let amt = file.seek_write(buf.as_ref(), offset)?;
 
-    Ok(amt)
+        Ok(amt)
+    })
+    .await
 }
 
-async fn recv<T>(sock: &UdpSocket, from: &T, buf: &mut [u8]) -> Result<usize, Box<dyn Error>>
+/// Adapter used for running a synchronous operation on an asynchronous Tokio file.
+async fn with_std_file<F, O>(file: &File, f: F) -> O
+where
+    F: FnOnce(&std::fs::File) -> O + Send + 'static,
+    O: Send + 'static,
+{
+    // SAFETY: We do not hand out the `File` to any APIs that expect the `File` to be the sole
+    // owner of its fd/handle.
+    #[cfg(unix)]
+    let file = unsafe { std::fs::File::from_raw_fd(file.as_raw_fd()) };
+    #[cfg(windows)]
+    let file = unsafe { std::fs::File::from_raw_handle(file.as_raw_handle()) };
+
+    // We don't own the file descriptor so we must not drop the file
+    let file = ManuallyDrop::new(file);
+
+    tokio::task::spawn_blocking(move || f(&*file)).await.unwrap()
+}
+
+async fn recv<T>(sock: &UdpSocket, from: &T, buf: &mut [u8]) -> Result<usize, Box<dyn Error + Send + Sync>>
 where
     T: ToSocketAddrs,
 {
