@@ -142,6 +142,8 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
     loop {
         #[cfg(feature = "logging")]
         info!("Sending done, getting dropped messages");
+
+        // sending done
         let mut buf = [0u8; 508];
         let amt = send_unil_recv(&sock, &[5], &reciever, &mut buf, 100).await?;
 
@@ -154,7 +156,11 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
             #[cfg(feature = "logging")]
             info!("No dropped messages left, finishing...");
             return Ok(());
+        } else if buf[0] != 6 {
+            continue;
         }
+
+        // Some messages were missed
 
         let missed = &buf[1..];
         

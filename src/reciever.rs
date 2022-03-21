@@ -384,13 +384,17 @@ where
 
     let mut first = true;
     'pass: loop {
+        // This is Some if some message needs to be inserted before everything else
+        // This is used when it sends the dropped messsages message and the first response is the first
         let mut first_data: Option<([u8; 508], usize)> = None;
 
         if !first {
             let dropped = prog_tracker.get_unrecv()?;
 
             if dropped.len() == 0 {
-                // Send message that everything is recieved
+                // Everything was recieved correctly
+                #[cfg(feature = "logging")]
+                debug!("everything recieved correctly");
 
                 loop {
                     let sleep = time::sleep(Duration::from_millis(1500));
@@ -416,14 +420,21 @@ where
 
                 break;
             }
+
+            #[cfg(feature = "logging")]
+            debug!("everything was not recieved correctly");
+            // Everything was not sent correctly
             let dropped_msg = gen_dropped_msg(dropped)?;
 
-            let mut buf = [0u8; 508];
             loop {
+                // Send dropped messages
+                let mut buf = [0u8; 508];
                 let amt = send_unil_recv(&sock, &dropped_msg, &sender, &mut buf, 100).await?;
                 let msg_buf = &buf[0..amt];
                 // If it's the same message
-                if msg_buf.len() != 1 && msg_buf[0] != 5 {
+                if msg_buf.len() > 1 && msg_buf[0] != 5 {
+                    // This message will be the first i a sequence of messages
+                    // That's why we use first data
                     first_data = Some((buf, amt));
                     break;
                 }
@@ -464,6 +475,7 @@ where
             } else if buf.len() == 1 && buf[0] == 5 {
                 // Done sending
                 continue 'pass;
+                // This will send the dropped messages in the new pass
             }
 
             if first && buf[0] == 8 {
@@ -478,7 +490,7 @@ where
             write_msg(buf, file, &mut prog_tracker)?;
             
             #[cfg(feature = "logging")]
-            info!("msg {} / {}, {}%", msg_num, size, msg_num * 100 / size);
+            info!("msg {} / {}, {}%", msg_num, size / 500, msg_num * 100 / (size / 500));
             first = false;
         }
     }
