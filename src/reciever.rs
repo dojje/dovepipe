@@ -363,7 +363,7 @@ where
         let mut new_buf = [0u8; 508];
 
         // Send message to sender until a messge gets recieved
-        let amt = send_until_recv(&*sock, &[9], &sender, &mut new_buf, 500).await?;
+        let amt = send_until_recv(&*sock, &[9], &sender, &mut new_buf, 50).await?;
 
         #[cfg(feature = "logging")]
         debug!("got size msg: {:?}", &new_buf[0..amt]);
@@ -448,7 +448,7 @@ where
             loop {
                 // Send dropped messages to sender
                 let mut buf = [0u8; 508];
-                let amt = send_until_recv(&sock, &dropped_msg, &sender, &mut buf, 100).await?;
+                let amt = send_until_recv(&sock, &dropped_msg, &sender, &mut buf, 10).await?;
 
                 // This will probably be the first data msg
                 let msg_buf = &buf[0..amt];

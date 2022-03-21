@@ -129,6 +129,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         let buf = get_buf(&msg_num, &file_buf[0..amt]);
 
         // Send the data to the reciever
+        time::sleep(Duration::from_micros(800)).await;
         sock.send_to(&buf, reciever).await?;
 
         // Increment the offset in file
@@ -150,7 +151,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         // sending done
         // Tell the reciever that i am done sending
         let mut buf = [0u8; 508];
-        let amt = send_until_recv(&sock, &[5], &reciever, &mut buf, 100).await?;
+        let amt = send_until_recv(&sock, &[5], &reciever, &mut buf, 10).await?;
 
         // This will be an array of u64s with missed things
         // The first will be a message
