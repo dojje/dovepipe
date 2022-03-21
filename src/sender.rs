@@ -123,12 +123,15 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
     let mut msg_num: u64 = 0;
 
     loop {
+        // Read from file
         let (file_buf, amt) = read_position(&input_file, [0u8; 500], offset).await?;
 
         let buf = get_buf(&msg_num, &file_buf[0..amt]);
 
+        // Send the data to the reciever
         sock.send_to(&buf, reciever).await?;
 
+        // Increment the offset in file
         offset += 500;
         if offset >= file_len {
             break;
@@ -139,11 +142,13 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         msg_num += 1;
     }
 
+    // First pass is done
     loop {
         #[cfg(feature = "logging")]
         debug!("Sending done, getting dropped messages");
 
         // sending done
+        // Tell the reciever that i am done sending
         let mut buf = [0u8; 508];
         let amt = send_unil_recv(&sock, &[5], &reciever, &mut buf, 100).await?;
 
@@ -151,24 +156,28 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         // The first will be a message
         let buf = &buf[0..amt];
         if buf[0] == 7 {
-            // 6 is missed
+            // Everyting was recieved correctly
             holepuncher.abort();
             #[cfg(feature = "logging")]
             info!("No dropped messages left, finishing...");
             return Ok(());
         } else if buf[0] != 6 {
+            // If the message happens to not be of type missed messages
             continue;
         }
 
         // Some messages were missed
-
+        // Aray of missed messages
         let missed = &buf[1..];
+        // Starting from 1 instead of 0 because the first indicates it's of type missed messages
 
         #[cfg(feature = "logging")]
         debug!("Dropped messages: {}", missed.len() / 8);
+        // Iterate over missed messages
         for i in 0..(missed.len() / 8) {
             let j = i * 8;
             // Convert bytes to offset
+            // Get the missed messages
             let missed_msg = u8s_to_u64(&missed[j..j + 8])?;
 
             // Read from file
@@ -177,6 +186,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
             let file_buf = &file_buf[0..amt];
             let buf = get_buf(&missed_msg, file_buf);
 
+            // Send it
             sock.send_to(&buf, reciever).await?;
         }
     }

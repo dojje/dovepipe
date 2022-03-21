@@ -78,7 +78,8 @@
 //! If any messages got dropped the reciever will send a list of those.
 //! If the file was recieved correctly the reciever will send a message.
 //!
-
+#[cfg(feature="logging")]
+use log::debug;
 pub use tokio::fs::File;
 
 use std::{
@@ -157,12 +158,19 @@ async fn send_unil_recv<T: ToSocketAddrs>(
         tokio::select! {
             _ = send_interval.tick() => {
                 sock.send_to(msg, addr).await?;
+                #[cfg(feature = "logging")]
+                debug!("send message starting with {}", msg[0]);
 
             }
 
             result = sock.recv_from(buf) => {
                 let (amt, src) = result?;
+                #[cfg(feature = "logging")]
+                debug!("recieved message");
+
                 if &src != &lookup_host(addr).await?.next().unwrap() {
+                    #[cfg(feature = "logging")]
+                    debug!("it was from a wrong address ");
                     continue;
                 }
                 break amt;

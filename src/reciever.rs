@@ -397,8 +397,10 @@ where
         let mut first_data: Option<([u8; 508], usize)> = None;
 
         if !first {
+            // Get unrecieved messages from progress tracker
             let dropped = prog_tracker.get_unrecv().await?;
 
+            // If there were no dropped messages
             if dropped.len() == 0 {
                 // Everything was recieved correctly
                 #[cfg(feature = "logging")]
@@ -417,6 +419,7 @@ where
                             let amt = amt?;
                             let buf = &buf[0..amt];
 
+                            // Make sure the sender knows the file is recieved
                             if buf[0] == 5 {
                                 sock.send_to(&[7], sender).await?;
 
@@ -428,19 +431,22 @@ where
 
                 break;
             }
+            // Everything was not sent correctly
 
             #[cfg(feature = "logging")]
             debug!("everything was not recieved correctly");
-            // Everything was not sent correctly
+
+            // Generate message containing dropped messages id
             let dropped_msg = gen_dropped_msg(dropped)?;
 
             loop {
-                // Send dropped messages
+                // Send dropped messages to sender
                 let mut buf = [0u8; 508];
                 let amt = send_unil_recv(&sock, &dropped_msg, &sender, &mut buf, 100).await?;
+
+                // This will probably be the first data msg
                 let msg_buf = &buf[0..amt];
-                // If it's the same message
-                if msg_buf.len() > 1 && msg_buf[0] != 5 {
+                if msg_buf.len() > 1 {
                     // This message will be the first i a sequence of messages
                     // That's why we use first data
                     first_data = Some((buf, amt));
@@ -450,17 +456,19 @@ where
         }
 
         loop {
-            let wait_time = time::sleep(Duration::from_millis(2000));
+            // Get message from sender
             let mut buf = [0; 508];
-
             let amt = if let Some((new_buf, amt)) = first_data {
+                // If there already was data then it should use it
                 buf = new_buf;
 
                 first_data = None;
 
                 amt
             } else {
+                // Otherwise it should reiceve from the sender
                 // Recieve message from sender
+                let wait_time = time::sleep(Duration::from_millis(2000));
                 let amt = tokio::select! {
                     _ = wait_time => {
                         break;
@@ -475,21 +483,21 @@ where
                 amt
             };
 
+            // Create a slice of the buffer
             let buf = &buf[0..amt];
 
-            // Skip if the first iteration is a hole punch msg
+            // Skip if it's just a hole punch msg
             if buf.len() == 1 && buf[0] == 255 {
                 continue;
             } else if buf.len() == 1 && buf[0] == 5 {
                 // Done sending
                 continue 'pass;
                 // This will send the dropped messages in the new pass
-            }
-
-            if first && buf[0] == 8 {
+            } else if first && buf[0] == 8 {
                 continue;
             }
 
+            // Write the msg to the disk
             // Remember msg num if logging is on
             // This is to log progress
             #[cfg(feature = "logging")]
