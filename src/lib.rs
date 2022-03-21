@@ -146,7 +146,7 @@ fn u8s_to_u64(nums: &[u8]) -> io::Result<u64> {
     Ok(big_number)
 }
 
-async fn send_unil_recv<T: ToSocketAddrs>(
+async fn send_until_recv<T: ToSocketAddrs>(
     sock: &UdpSocket,
     msg: &[u8],
     addr: &T,
@@ -166,7 +166,7 @@ async fn send_unil_recv<T: ToSocketAddrs>(
             result = sock.recv_from(buf) => {
                 let (amt, src) = result?;
                 #[cfg(feature = "logging")]
-                debug!("recieved message");
+                debug!("recieved message that is {} long and starts with {}", amt, buf[0]);
 
                 if &src != &lookup_host(addr).await?.next().unwrap() {
                     #[cfg(feature = "logging")]

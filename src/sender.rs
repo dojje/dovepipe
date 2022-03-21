@@ -6,7 +6,7 @@ use log::debug;
 use log::info;
 use tokio::{fs::File, net::ToSocketAddrs, time};
 
-use crate::{get_buf, punch_hole, read_position, send_unil_recv, u8s_to_u64, Source};
+use crate::{get_buf, punch_hole, read_position, send_until_recv, u8s_to_u64, Source};
 
 async fn get_file_buf_from_msg_num<Buf>(
     msg: u64,
@@ -150,7 +150,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         // sending done
         // Tell the reciever that i am done sending
         let mut buf = [0u8; 508];
-        let amt = send_unil_recv(&sock, &[5], &reciever, &mut buf, 100).await?;
+        let amt = send_until_recv(&sock, &[5], &reciever, &mut buf, 100).await?;
 
         // This will be an array of u64s with missed things
         // The first will be a message
