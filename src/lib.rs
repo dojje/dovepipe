@@ -78,7 +78,7 @@
 //! If any messages got dropped the reciever will send a list of those.
 //! If the file was recieved correctly the reciever will send a message.
 //!
-#[cfg(feature="logging")]
+#[cfg(feature = "logging")]
 use log::debug;
 pub use tokio::fs::File;
 

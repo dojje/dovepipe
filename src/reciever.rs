@@ -3,6 +3,10 @@ use async_trait::async_trait;
 use log::debug;
 #[cfg(feature = "logging")]
 use log::info;
+#[cfg(feature = "logging")]
+use std::time::SystemTime;
+#[cfg(feature = "logging")]
+use std::time::UNIX_EPOCH;
 use std::{
     error,
     io::{self},
@@ -390,6 +394,8 @@ where
         ProgressTracking::Memory => Box::new(MemProgTracker::new(size)),
     };
 
+    #[cfg(feature = "logging")]
+    let mut last_msg = SystemTime::now();
     let mut first = true;
     'pass: loop {
         // This is Some if some message needs to be inserted before everything else
@@ -468,6 +474,17 @@ where
             } else {
                 // Otherwise it should reiceve from the sender
                 // Recieve message from sender
+
+                #[cfg(feature = "logging")]
+                {
+                    let last_msg_u64 = last_msg.duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
+
+                    let now = SystemTime::now();
+                    let now_f64 = now.duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
+
+                    debug!("last updated {}s ago", now_f64 - last_msg_u64);
+                }
+
                 let wait_time = time::sleep(Duration::from_millis(2000));
                 let amt = tokio::select! {
                     _ = wait_time => {
@@ -479,6 +496,13 @@ where
                         amt
                     }
                 };
+
+                #[cfg(feature = "logging")]
+                {
+                    let now = SystemTime::now();
+
+                    last_msg = now;
+                }
 
                 amt
             };
