@@ -1,21 +1,26 @@
+use async_trait::async_trait;
 #[cfg(feature = "logging")]
 use log::debug;
 #[cfg(feature = "logging")]
 use log::info;
 use std::{
     error,
-    fs::{remove_file, File, OpenOptions},
     io::{self},
     time::Duration,
 };
-use tokio::{net::ToSocketAddrs, time};
+use tokio::{
+    fs::{remove_file, File, OpenOptions},
+    net::ToSocketAddrs,
+    time,
+};
 
 use crate::{read_position, recv, send_unil_recv, u8s_to_u64, write_position, Source};
 
+#[async_trait]
 trait ProgressTracker {
-    fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>>;
-    fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>>;
-    fn destruct(&self);
+    async fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error + Send + Sync>>;
+    async fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error + Send + Sync>>;
+    async fn destruct(&self);
 }
 
 struct FileProgTrack {
@@ -25,15 +30,16 @@ struct FileProgTrack {
 }
 
 impl FileProgTrack {
-    fn new(filename: String, size: u64) -> Result<Self, Box<dyn error::Error>> {
+    async fn new(filename: String, size: u64) -> Result<Self, Box<dyn error::Error>> {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
-            .open(&filename)?;
+            .open(&filename)
+            .await?;
 
         // Populate file with 0:s
-        file.set_len(get_msg_amt(size))?;
+        file.set_len(get_msg_amt(size)).await?;
 
         Ok(Self {
             filename,
@@ -43,14 +49,14 @@ impl FileProgTrack {
     }
 }
 
+#[async_trait]
 impl ProgressTracker for FileProgTrack {
-    fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>> {
+    async fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error + Send + Sync>> {
         // Get position in index file
         let (offset, pos_in_offset) = get_pos_of_num(msg_num);
 
         // Read offset position from index file
-        let mut offset_buf = [0u8; 1];
-        read_position(&self.file, &mut offset_buf, offset)?;
+        let (offset_buf, _) = read_position(&self.file, [0u8; 1], offset).await?;
 
         // Change the offset
         let mut offset_binary = to_binary(offset_buf[0]);
@@ -58,12 +64,12 @@ impl ProgressTracker for FileProgTrack {
         let offset_buf = from_binary(offset_binary);
 
         // Write the offset
-        write_position(&self.file, &[offset_buf], offset)?;
+        write_position(&self.file, [offset_buf], offset).await?;
 
         Ok(())
     }
 
-    fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>> {
+    async fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error + Send + Sync>> {
         let mut dropped: Vec<u64> = Vec::new();
 
         // let mut byte = num / 8;
@@ -75,11 +81,10 @@ impl ProgressTracker for FileProgTrack {
             self.size / 500 + 1
         };
 
-        for byte in 0..self.file.metadata()?.len() {
+        for byte in 0..self.file.metadata().await?.len() {
             // For every byte
-            let mut buf = [0u8];
-            read_position(&self.file, &mut buf, byte)?;
-            let bin = to_binary(buf[0]);
+            let ([bin], _) = read_position(&self.file, [0u8], byte).await?;
+            let bin = to_binary(bin);
 
             let mut bit_pos = 0;
             for bit in bin {
@@ -103,8 +108,8 @@ impl ProgressTracker for FileProgTrack {
         Ok(dropped)
     }
 
-    fn destruct(&self) {
-        remove_file(&self.filename).unwrap()
+    async fn destruct(&self) {
+        remove_file(&self.filename).await.unwrap()
     }
 }
 
@@ -128,8 +133,9 @@ impl MemProgTracker {
     }
 }
 
+#[async_trait]
 impl ProgressTracker for MemProgTracker {
-    fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error>> {
+    async fn recv_msg(&mut self, msg_num: u64) -> Result<(), Box<dyn error::Error + Send + Sync>> {
         // Get position in index file
         let (offset, pos_in_offset) = get_pos_of_num(msg_num);
 
@@ -146,7 +152,7 @@ impl ProgressTracker for MemProgTracker {
         Ok(())
     }
 
-    fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error>> {
+    async fn get_unrecv(&self) -> Result<Vec<u64>, Box<dyn error::Error + Send + Sync>> {
         let mut dropped: Vec<u64> = Vec::new();
 
         // let mut byte = num / 8;
@@ -183,7 +189,7 @@ impl ProgressTracker for MemProgTracker {
         Ok(dropped)
     }
 
-    fn destruct(&self) {}
+    async fn destruct(&self) {}
 }
 
 pub enum ProgressTracking {
@@ -275,29 +281,29 @@ fn from_binary(bin: [bool; 8]) -> u8 {
     num
 }
 
-fn write_msg(
+async fn write_msg(
     buf: &[u8],
     out_file: &File,
     prog_tracker: &mut Box<dyn ProgressTracker>,
-) -> Result<u64, Box<dyn error::Error>> {
+) -> Result<u64, Box<dyn error::Error + Send + Sync>> {
     // Get msg num
     let msg_num = u8s_to_u64(&buf[0..8])?;
 
     let msg_offset = get_offset(msg_num);
 
     // Write the data of the msg to out_file
-    let rest = &buf[8..];
-    write_position(out_file, &rest, msg_offset).unwrap();
+    let rest = buf[8..].to_owned();
+    write_position(out_file, rest, msg_offset).await.unwrap();
 
-    prog_tracker.recv_msg(msg_num)?;
+    prog_tracker.recv_msg(msg_num).await?;
 
     Ok(msg_num)
 }
 
 /// # This is used to recieve files
-/// 
+///
 /// ## Sending example
-/// 
+///
 /// This is taken from the official examples
 /// ```
 /// let port = 7890;
@@ -312,19 +318,19 @@ fn write_msg(
 /// .await
 /// .expect("error when sending file");
 /// ```
-/// This takes in a source which is the UdpSocket to send recieve from. 
-/// 
+/// This takes in a source which is the UdpSocket to send recieve from.
+///
 /// This looks for any senders on port 7890 on ip 127.0.0.1.
 /// *Note: 127.0.0.1 is the same as localhost*
-/// 
-/// When it finds one it will send the file 
+///
+/// When it finds one it will send the file
 ///
 pub async fn recv_file<T>(
     source: Source,
     file: &mut File,
     sender: T,
     progress_tracking: ProgressTracking,
-) -> Result<(), Box<dyn error::Error>>
+) -> Result<(), Box<dyn error::Error + Send + Sync>>
 where
     T: 'static + Clone + ToSocketAddrs + std::marker::Send + Copy, // This many traits is probalbly unnececery but it works
 {
@@ -378,7 +384,9 @@ where
     // Create index file
     // TODO Check so that file doesn't already exist
     let mut prog_tracker: Box<dyn ProgressTracker> = match progress_tracking {
-        ProgressTracking::File(filename) => Box::new(FileProgTrack::new(filename, size).unwrap()),
+        ProgressTracking::File(filename) => {
+            Box::new(FileProgTrack::new(filename, size).await.unwrap())
+        }
         ProgressTracking::Memory => Box::new(MemProgTracker::new(size)),
     };
 
@@ -389,7 +397,7 @@ where
         let mut first_data: Option<([u8; 508], usize)> = None;
 
         if !first {
-            let dropped = prog_tracker.get_unrecv()?;
+            let dropped = prog_tracker.get_unrecv().await?;
 
             if dropped.len() == 0 {
                 // Everything was recieved correctly
@@ -487,8 +495,8 @@ where
             #[cfg(feature = "logging")]
             let msg_num = write_msg(buf, file, &mut prog_tracker)?;
             #[cfg(not(feature = "logging"))]
-            write_msg(buf, file, &mut prog_tracker)?;
-            
+            write_msg(buf, file, &mut prog_tracker).await?;
+
             #[cfg(feature = "logging")]
             info!("msg {} / {}, {}%", msg_num, size / 500, msg_num * 100 / (size / 500));
             first = false;
@@ -500,7 +508,7 @@ where
 }
 
 /// Converts an array of dropped messages into a 'dropped messages' message
-fn gen_dropped_msg(dropped: Vec<u64>) -> Result<Vec<u8>, Box<dyn error::Error>> {
+fn gen_dropped_msg(dropped: Vec<u64>) -> Result<Vec<u8>, Box<dyn error::Error + Send + Sync>> {
     if dropped.len() > 63 {
         return Err(Box::new(io::Error::new(
             io::ErrorKind::InvalidInput,
