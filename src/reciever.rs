@@ -462,6 +462,8 @@ where
         }
 
         loop {
+            // TODO: Writing the message takes too much time
+            // It can be fixed by writing to a buffer in memory and writing that buffer not that often
             // Get message from sender
             let mut buf = [0; 508];
             let amt = if let Some((new_buf, amt)) = first_data {
