@@ -1,4 +1,4 @@
-use std::fs::File;
+use tokio::fs::File;
 
 use dovepipe::{reciever::ProgressTracking, recv_file, Source};
 
@@ -9,7 +9,9 @@ async fn main() {
 
     recv_file(
         Source::Port(port),
-        &mut File::create("output_from_recv.txt").expect("could not create output file"),
+        &mut File::create("output_from_recv.txt")
+            .await
+            .expect("could not create output file"),
         "127.0.0.1:3456",
         ProgressTracking::Memory,
     )
