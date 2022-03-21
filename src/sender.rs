@@ -141,7 +141,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
 
     loop {
         #[cfg(feature = "logging")]
-        info!("Sending done, getting dropped messages");
+        debug!("Sending done, getting dropped messages");
 
         // sending done
         let mut buf = [0u8; 508];
@@ -165,7 +165,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         let missed = &buf[1..];
 
         #[cfg(feature = "logging")]
-        info!("Dropped messages: {}", missed.len() / 8);
+        debug!("Dropped messages: {}", missed.len() / 8);
         for i in 0..(missed.len() / 8) {
             let j = i * 8;
             // Convert bytes to offset
