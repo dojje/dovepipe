@@ -498,7 +498,12 @@ where
             write_msg(buf, file, &mut prog_tracker).await?;
 
             #[cfg(feature = "logging")]
-            info!("msg {} / {}, {}%", msg_num, size / 500, msg_num * 100 / (size / 500));
+            info!(
+                "msg {} / {}, {}%",
+                msg_num,
+                size / 500,
+                msg_num * 100 / (size / 500)
+            );
             first = false;
         }
     }
