@@ -79,6 +79,8 @@
 //! If the file was recieved correctly the reciever will send a message.
 //!
 
+pub use tokio::fs::File;
+
 use std::{
     error,
     error::Error,
@@ -90,7 +92,6 @@ use std::{
 };
 
 use tokio::{
-    fs::File,
     net::{lookup_host, ToSocketAddrs, UdpSocket},
     time,
 };
