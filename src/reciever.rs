@@ -503,6 +503,7 @@ where
         }
     }
     holepuncher.abort();
+    prog_tracker.destruct().await;
 
     Ok(())
 }
