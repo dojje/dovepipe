@@ -493,7 +493,7 @@ where
             // Remember msg num if logging is on
             // This is to log progress
             #[cfg(feature = "logging")]
-            let msg_num = write_msg(buf, file, &mut prog_tracker)?;
+            let msg_num = write_msg(buf, file, &mut prog_tracker).await?;
             #[cfg(not(feature = "logging"))]
             write_msg(buf, file, &mut prog_tracker).await?;
 
