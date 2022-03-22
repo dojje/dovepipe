@@ -1,4 +1,4 @@
-use std::{io, net::SocketAddr, str::FromStr};
+use std::{io, net::SocketAddr, str::FromStr, path::Path};
 
 use dovepipe::{send_file, Source};
 
@@ -21,7 +21,7 @@ async fn main() {
     let reciever = SocketAddr::from_str(&reciever_ip_str).expect("not a valid ip address");
 
     // Send the file with the send_file funciton
-    send_file(Source::Port(3456), "./examples/file_to_send.txt", reciever)
+    send_file(Source::Port(3456), Path::new("./examples/file_to_send.txt"), reciever)
         .await
         .expect("error when sending file");
 }

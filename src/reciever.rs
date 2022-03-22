@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use log::debug;
 #[cfg(feature = "logging")]
 use log::info;
+use std::path::Path;
 #[cfg(feature = "logging")]
 use std::time::SystemTime;
 #[cfg(feature = "logging")]
@@ -331,13 +332,14 @@ async fn write_msg(
 ///
 pub async fn recv_file<T>(
     source: Source,
-    file: &mut File,
+    filepath: &Path,
     sender: T,
     progress_tracking: ProgressTracking,
 ) -> Result<(), Box<dyn error::Error + Send + Sync>>
 where
     T: 'static + Clone + ToSocketAddrs + std::marker::Send + Copy, // This many traits is probalbly unnececery but it works
 {
+    let file = File::create(filepath).await?;
     let sock = source.into_socket().await;
 
     let sock_ = sock.clone();
@@ -529,7 +531,7 @@ where
             #[cfg(feature = "logging")]
             let msg_num = write_msg(buf, file, &mut prog_tracker).await?;
             #[cfg(not(feature = "logging"))]
-            write_msg(buf, file, &mut prog_tracker).await?;
+            write_msg(buf, &file, &mut prog_tracker).await?;
 
             #[cfg(feature = "logging")]
             info!(

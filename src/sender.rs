@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::{error, time::Duration};
 
 #[cfg(feature = "logging")]
@@ -42,7 +43,7 @@ where
 ///
 pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::fmt::Display>(
     source: Source,
-    file_name: &str,
+    filepath: &Path,
     reciever: T,
 ) -> Result<(), Box<dyn error::Error + Send + Sync>> {
     #[cfg(feature = "logging")]
@@ -68,7 +69,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
 
     time::sleep(Duration::from_millis(1000)).await;
 
-    let input_file = File::open(file_name).await?;
+    let input_file = File::open(filepath).await?;
     let file_len = input_file.metadata().await?.len();
 
     let file_len_arr = file_len.to_be_bytes();
