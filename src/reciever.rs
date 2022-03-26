@@ -398,7 +398,7 @@ where
     let msg_buffer: Arc<RwLock<Vec<Vec<u8>>>> = Arc::new(RwLock::new(Vec::new()));
     // Spawn writer task
     let msg_buffer_ = msg_buffer.clone();
-    task::spawn(async move {
+    let msg_writer = task::spawn(async move {
         let msg_buffer = msg_buffer_;
         loop {
             time::sleep(Duration::from_millis(200)).await;
@@ -567,6 +567,9 @@ where
     }
     holepuncher.abort();
     prog_tracker.destruct().await;
+
+    time::sleep(Duration::from_millis(1000)).await;
+    msg_writer.abort();
 
     Ok(())
 }
