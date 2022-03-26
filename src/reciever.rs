@@ -492,6 +492,8 @@ where
                 buf = new_buf;
 
                 first_data = None;
+                #[cfg(feature = "logging")]
+                debug!("the msg recieved was first data");
 
                 amt
             } else {

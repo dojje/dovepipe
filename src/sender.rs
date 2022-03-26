@@ -130,6 +130,7 @@ pub async fn send_file<T: Clone + 'static + ToSocketAddrs + Send + Copy + std::f
         let buf = get_buf(&msg_num, &file_buf[0..amt]);
 
         // Send the data to the reciever
+        // time::sleep(Duration::from_micros(10)).await;
         sock.send_to(&buf, reciever).await?;
 
         // Increment the offset in file
