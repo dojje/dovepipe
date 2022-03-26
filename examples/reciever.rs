@@ -1,8 +1,4 @@
-use std::path::Path;
-
-
-
-use dovepipe::{reciever::ProgressTracking, recv_file, Source};
+use dovepipe::{reciever::ProgressTracking, recv_file, Source, File};
 
 #[tokio::main]
 async fn main() {
@@ -11,7 +7,7 @@ async fn main() {
 
     recv_file(
         Source::Port(port),
-        &Path::new("output_from_recv.txt"),
+        File::create("output_from_recv.txt").await.expect("could not create file"),
         "127.0.0.1:3456",
         ProgressTracking::Memory,
     )

@@ -3,6 +3,9 @@ use async_trait::async_trait;
 use log::debug;
 #[cfg(feature = "logging")]
 use log::info;
+use tokio::sync::RwLock;
+use tokio::task;
+use std::sync::Arc;
 #[cfg(feature = "logging")]
 use std::time::SystemTime;
 #[cfg(feature = "logging")]
@@ -288,7 +291,6 @@ fn from_binary(bin: [bool; 8]) -> u8 {
 async fn write_msg(
     buf: &[u8],
     out_file: &File,
-    prog_tracker: &mut Box<dyn ProgressTracker>,
 ) -> Result<u64, Box<dyn error::Error + Send + Sync>> {
     // Get msg num
     let msg_num = u8s_to_u64(&buf[0..8])?;
@@ -298,8 +300,6 @@ async fn write_msg(
     // Write the data of the msg to out_file
     let rest = buf[8..].to_owned();
     write_position(out_file, rest, msg_offset).await.unwrap();
-
-    prog_tracker.recv_msg(msg_num).await?;
 
     Ok(msg_num)
 }
@@ -331,7 +331,7 @@ async fn write_msg(
 ///
 pub async fn recv_file<T>(
     source: Source,
-    file: &File,
+    file: File,
     sender: T,
     progress_tracking: ProgressTracking,
 ) -> Result<(), Box<dyn error::Error + Send + Sync>>
@@ -393,6 +393,27 @@ where
         }
         ProgressTracking::Memory => Box::new(MemProgTracker::new(size)),
     };
+
+    // Create writer
+    let msg_buffer: Arc<RwLock<Vec<Vec<u8>>>> = Arc::new(RwLock::new(Vec::new()));
+    // Spawn writer task
+    let msg_buffer_ = msg_buffer.clone();
+    task::spawn(async move {
+        let msg_buffer = msg_buffer_;
+        loop {
+            time::sleep(Duration::from_millis(200)).await;
+
+            // Write whole buffer to file
+            let mut buf = msg_buffer.write().await;
+
+            let og_buf_len = buf.len();
+            for i in 0..og_buf_len {
+                let msg = buf.remove(i);
+                write_msg(&msg, &file).await.unwrap();
+            }
+
+        }
+    });
 
     #[cfg(feature = "logging")]
     let mut last_msg = SystemTime::now();
@@ -526,10 +547,13 @@ where
             // Write the msg to the disk
             // Remember msg num if logging is on
             // This is to log progress
-            #[cfg(feature = "logging")]
-            let msg_num = write_msg(buf, file, &mut prog_tracker).await?;
-            #[cfg(not(feature = "logging"))]
-            write_msg(buf, &file, &mut prog_tracker).await?;
+            let msg_num = u8s_to_u64(&buf[0..8])?;
+            // Append message to buffer
+            msg_buffer.write().await.push(buf.to_owned());
+            prog_tracker.recv_msg(msg_num).await?;
+
+            // Main thread handles progress tracking
+            // msg buffer writes messages
 
             #[cfg(feature = "logging")]
             info!(
