@@ -406,14 +406,13 @@ where
             // Write whole buffer to file
             let mut buf = msg_buffer.write().await;
 
-            let og_buf_len = buf.len();
+            let buf_len = buf.len();
             // 
-            for i in 0..og_buf_len {
-                let msg = buf[i].clone();
+            for _ in 0..buf_len {
+                // Goes through every message in the buffer, removes it and writes it
+                let msg = buf.swap_remove(0); // Order doesn't matter because the position is written in the message
                 write_msg(&msg, &file).await.unwrap();
             }
-
-            buf.clear();
 
         }
     });
