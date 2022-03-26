@@ -407,10 +407,13 @@ where
             let mut buf = msg_buffer.write().await;
 
             let og_buf_len = buf.len();
+            // 
             for i in 0..og_buf_len {
-                let msg = buf.remove(i);
+                let msg = buf[i].clone();
                 write_msg(&msg, &file).await.unwrap();
             }
+
+            buf.clear();
 
         }
     });
